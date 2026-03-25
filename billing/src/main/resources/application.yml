@@ -1,0 +1,29 @@
+spring:
+  couchbase:
+    connection-string: couchbase://localhost
+    username: Administrator
+    password: Aman@2003
+
+  data:
+    couchbase:
+      bucket-name: prop-tax
+      scope-name: main
+
+server:
+  port: 8080
+
+app:
+  jwt:
+    secret: ThisIsAVeryLongSecretKeyForJWTTokenGeneration256BitsMinimum!!
+    expiration-ms: 86400000
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.housing.billing: DEBUG
+    org.springframework.data.couchbase: DEBUG
