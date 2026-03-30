@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -25,9 +26,22 @@ public class ProfileService {
             "code", "label", "monthlyAmount", "active"
     );
 
+    private static final Map<String, String> FILTER_VALUE_NOT_FOUND_MESSAGES = Map.of(
+            "code", "Profile not found for code '%s'",
+            "label", "Profile not found for label '%s'",
+            "monthlyAmount", "Profile not found for monthlyAmount '%s'",
+            "active", "Profile not found for active '%s'"
+    );
+
     public List<Profile> list(String tenantId, String filter) {
         List<Profile> tenantScopedProfiles = profileRepository.findByTenantId(tenantId);
-        return dynamicFilterEngine.apply(tenantScopedProfiles, filter, Profile.class, FILTERABLE_FIELDS);
+        return dynamicFilterEngine.apply(
+                tenantScopedProfiles,
+                filter,
+                Profile.class,
+                FILTERABLE_FIELDS,
+                FILTER_VALUE_NOT_FOUND_MESSAGES
+        );
     }
 
     public Profile create(String tenantId, CreateProfileRequest req) {

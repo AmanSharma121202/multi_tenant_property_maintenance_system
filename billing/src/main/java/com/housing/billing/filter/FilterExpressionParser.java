@@ -21,7 +21,8 @@ public class FilterExpressionParser {
     }
 
     public enum LiteralType {
-        STRING,
+        STRING,        // Quoted string literal: "value"
+        IDENTIFIER,    // Unquoted identifier: value (should be rejected for string fields)
         NUMBER,
         BOOLEAN,
         NULL
@@ -102,7 +103,7 @@ public class FilterExpressionParser {
             case NUMBER -> new Literal(token.text, LiteralType.NUMBER);
             case BOOLEAN -> new Literal(Boolean.parseBoolean(token.text), LiteralType.BOOLEAN);
             case NULL -> new Literal(null, LiteralType.NULL);
-            case IDENTIFIER -> new Literal(token.text, LiteralType.STRING);
+            case IDENTIFIER -> new Literal(token.text, LiteralType.IDENTIFIER);
             default -> throw syntax("Unsupported literal: '" + token.text + "'", token.position);
         };
     }

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -27,7 +28,14 @@ public class PaymentService {
     private final DynamicFilterEngine dynamicFilterEngine;
 
     private static final Set<String> FILTERABLE_FIELDS = Set.of(
-            "unitId", "ownerId", "invoiceId", "method", "amount", "receivedAt", "txnRef"
+            "method", "amount", "receivedAt", "txnRef"
+    );
+
+    private static final Map<String, String> FILTER_VALUE_NOT_FOUND_MESSAGES = Map.of(
+            "method", "Payment not found for method '%s'",
+            "amount", "Payment not found for amount '%s'",
+            "receivedAt", "Payment not found for receivedAt '%s'",
+            "txnRef", "Payment not found for txnRef '%s'"
     );
 
     public Payment record(String tenantId, RecordPaymentRequest req, String idempotencyKey) {
@@ -78,7 +86,13 @@ public class PaymentService {
 
     public List<Payment> list(String tenantId, String filter) {
         List<Payment> tenantScopedPayments = paymentRepository.findAllByTenantId(tenantId);
-        return dynamicFilterEngine.apply(tenantScopedPayments, filter, Payment.class, FILTERABLE_FIELDS);
+        return dynamicFilterEngine.apply(
+                tenantScopedPayments,
+                filter,
+                Payment.class,
+                FILTERABLE_FIELDS,
+                FILTER_VALUE_NOT_FOUND_MESSAGES
+        );
     }
 
     public Payment get(String tenantId, String paymentId) {

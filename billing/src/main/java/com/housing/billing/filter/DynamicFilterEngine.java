@@ -1,5 +1,7 @@
 package com.housing.billing.filter;
 
+import com.housing.billing.exception.FilterValueNotFoundException;
+import com.housing.billing.exception.InvalidFilterSyntaxException;
 import com.housing.billing.exception.UnknownFilterFieldException;
 import com.housing.billing.exception.UnsupportedFilterOperatorException;
 import org.springframework.stereotype.Component;
@@ -9,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,12 +25,116 @@ public class DynamicFilterEngine {
     private final FilterExpressionParser parser = new FilterExpressionParser();
 
     public <T> List<T> apply(List<T> source, String filter, Class<T> type, Set<String> allowedFields) {
+        return apply(source, filter, type, allowedFields, Map.of());
+    }
+
+    public <T> List<T> apply(List<T> source,
+                             String filter,
+                             Class<T> type,
+                             Set<String> allowedFields,
+                             Map<String, String> valueNotFoundMessages) {
         if (filter == null || filter.isBlank()) {
             return source;
         }
+
         FilterExpressionParser.Node root = parser.parse(filter);
+        Map<String, Field> fields = getAllFields(type);
+        validateFilterValues(root, source, fields, allowedFields, valueNotFoundMessages, new HashSet<>());
         Predicate<T> predicate = buildPredicate(root, type, allowedFields);
-        return source.stream().filter(predicate).toList();
+        List<T> filtered = source.stream().filter(predicate).toList();
+        throwIfComparatorResultIsEmpty(root, filtered);
+        return filtered;
+    }
+
+    private <T> void validateFilterValues(FilterExpressionParser.Node node,
+                                          List<T> source,
+                                          Map<String, Field> fields,
+                                          Set<String> allowedFields,
+                                          Map<String, String> valueNotFoundMessages,
+                                          Set<String> validatedConditions) {
+        if (node instanceof FilterExpressionParser.LogicalNode logicalNode) {
+            validateFilterValues(logicalNode.left(), source, fields, allowedFields, valueNotFoundMessages, validatedConditions);
+            validateFilterValues(logicalNode.right(), source, fields, allowedFields, valueNotFoundMessages, validatedConditions);
+            return;
+        }
+
+        FilterExpressionParser.ConditionNode condition = (FilterExpressionParser.ConditionNode) node;
+        if (!valueNotFoundMessages.containsKey(condition.field())) {
+            return;
+        }
+
+        if (condition.operator() != ComparisonOperator.EQ) {
+            return;
+        }
+
+        String conditionKey = condition.field() + "|" + condition.operator() + "|" + condition.literal().value();
+        if (!validatedConditions.add(conditionKey)) {
+            return;
+        }
+
+        if (!allowedFields.contains(condition.field())) {
+            throw new UnknownFilterFieldException("Unknown filter field: '" + condition.field() + "'");
+        }
+
+        Field field = fields.get(condition.field());
+        if (field == null) {
+            throw new UnknownFilterFieldException("Field is not present on model: '" + condition.field() + "'");
+        }
+
+        Object expected = convertLiteral(condition.literal(), field, condition.field(), condition.operator());
+        boolean valueExists = source.stream().anyMatch(item -> Objects.equals(readField(field, item), expected));
+        if (valueExists) {
+            return;
+        }
+
+        String template = valueNotFoundMessages.get(condition.field());
+        String message = template.contains("%s")
+                ? String.format(template, expected)
+                : template;
+        throw new FilterValueNotFoundException(message);
+    }
+
+    private <T> void throwIfComparatorResultIsEmpty(FilterExpressionParser.Node node, List<T> filtered) {
+        if (!filtered.isEmpty()) {
+            return;
+        }
+
+        FilterExpressionParser.ConditionNode condition = findFirstComparatorCondition(node);
+        if (condition == null) {
+            return;
+        }
+
+        String input = literalToMessageValue(condition.literal());
+        String message = switch (condition.operator()) {
+            case LTE -> "Not found value less than or equal to " + input;
+            case GTE -> "Not found value greater than or equal to " + input;
+            case LT -> "Not found value less than " + input;
+            case GT -> "Not found value greater than " + input;
+            case NE -> "Not found value not equal to " + input;
+            default -> null;
+        };
+
+        if (message != null) {
+            throw new FilterValueNotFoundException(message);
+        }
+    }
+
+    private FilterExpressionParser.ConditionNode findFirstComparatorCondition(FilterExpressionParser.Node node) {
+        if (node instanceof FilterExpressionParser.LogicalNode logicalNode) {
+            FilterExpressionParser.ConditionNode left = findFirstComparatorCondition(logicalNode.left());
+            if (left != null) {
+                return left;
+            }
+            return findFirstComparatorCondition(logicalNode.right());
+        }
+
+        FilterExpressionParser.ConditionNode condition = (FilterExpressionParser.ConditionNode) node;
+        return condition.operator() == ComparisonOperator.EQ ? null : condition;
+    }
+
+    private String literalToMessageValue(FilterExpressionParser.Literal literal) {
+        Object value = literal.value();
+        return value == null ? "null" : String.valueOf(value);
     }
 
     private <T> Predicate<T> buildPredicate(FilterExpressionParser.Node node, Class<T> type, Set<String> allowedFields) {
@@ -100,6 +207,7 @@ public class DynamicFilterEngine {
                                   ComparisonOperator operator) {
         Class<?> type = wrap(field.getType());
         Object value = literal.value();
+        FilterExpressionParser.LiteralType literalType = literal.type();
 
         if (value == null) {
             if (operator != ComparisonOperator.EQ && operator != ComparisonOperator.NE) {
@@ -110,46 +218,129 @@ public class DynamicFilterEngine {
         }
 
         try {
+            // ===== STRING FIELDS =====
             if (type == String.class) {
+                // Only STRING literal type is allowed (quoted strings)
+                // IDENTIFIER (unquoted) must be rejected
+                if (literalType != FilterExpressionParser.LiteralType.STRING) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
                 return String.valueOf(value);
             }
+
+            // ===== BOOLEAN FIELDS =====
             if (type == Boolean.class) {
-                if (literal.type() == FilterExpressionParser.LiteralType.BOOLEAN) {
+                if (literalType == FilterExpressionParser.LiteralType.BOOLEAN) {
                     return value;
                 }
-                return Boolean.parseBoolean(String.valueOf(value));
+                // Reject all non-boolean types
+                throw new InvalidFilterSyntaxException("Unexpected token");
             }
+
+            // ===== INTEGER FIELDS =====
             if (type == Integer.class) {
-                return Integer.parseInt(String.valueOf(value));
+                if (literalType != FilterExpressionParser.LiteralType.NUMBER) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
+                try {
+                    return Integer.parseInt(String.valueOf(value));
+                } catch (NumberFormatException ex) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
             }
+
+            // ===== LONG FIELDS =====
             if (type == Long.class) {
-                return Long.parseLong(String.valueOf(value));
+                if (literalType != FilterExpressionParser.LiteralType.NUMBER) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
+                try {
+                    return Long.parseLong(String.valueOf(value));
+                } catch (NumberFormatException ex) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
             }
+
+            // ===== DOUBLE FIELDS =====
             if (type == Double.class) {
-                return Double.parseDouble(String.valueOf(value));
+                if (literalType != FilterExpressionParser.LiteralType.NUMBER) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
+                try {
+                    return Double.parseDouble(String.valueOf(value));
+                } catch (NumberFormatException ex) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
             }
+
+            // ===== FLOAT FIELDS =====
             if (type == Float.class) {
-                return Float.parseFloat(String.valueOf(value));
+                if (literalType != FilterExpressionParser.LiteralType.NUMBER) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
+                try {
+                    return Float.parseFloat(String.valueOf(value));
+                } catch (NumberFormatException ex) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
             }
+
+            // ===== BIGDECIMAL FIELDS =====
             if (type == BigDecimal.class) {
-                return new BigDecimal(String.valueOf(value));
+                if (literalType != FilterExpressionParser.LiteralType.NUMBER) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
+                try {
+                    return new BigDecimal(String.valueOf(value));
+                } catch (NumberFormatException ex) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
             }
+
+            // ===== INSTANT FIELDS =====
             if (type == Instant.class) {
-                return Instant.parse(String.valueOf(value));
+                if (literalType != FilterExpressionParser.LiteralType.STRING) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
+                try {
+                    return Instant.parse(String.valueOf(value));
+                } catch (Exception ex) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
             }
+
+            // ===== LOCALDATE FIELDS =====
             if (type == LocalDate.class) {
-                return LocalDate.parse(String.valueOf(value));
+                if (literalType != FilterExpressionParser.LiteralType.STRING) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
+                try {
+                    return LocalDate.parse(String.valueOf(value));
+                } catch (Exception ex) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
             }
+
+            // ===== LOCALDATETIME FIELDS =====
             if (type == LocalDateTime.class) {
-                return LocalDateTime.parse(String.valueOf(value));
+                if (literalType != FilterExpressionParser.LiteralType.STRING) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
+                try {
+                    return LocalDateTime.parse(String.valueOf(value));
+                } catch (Exception ex) {
+                    throw new InvalidFilterSyntaxException("Unexpected token");
+                }
             }
+
             throw new UnsupportedFilterOperatorException(
                     "Field type '" + type.getSimpleName() + "' is not supported for field '" + fieldName + "'"
             );
         } catch (RuntimeException ex) {
-            throw new UnsupportedFilterOperatorException(
-                    "Invalid value '" + value + "' for field '" + fieldName + "' of type '" + type.getSimpleName() + "'"
-            );
+            if (ex instanceof UnsupportedFilterOperatorException || ex instanceof InvalidFilterSyntaxException) {
+                throw ex;
+            }
+            throw new InvalidFilterSyntaxException("Unexpected token");
         }
     }
 

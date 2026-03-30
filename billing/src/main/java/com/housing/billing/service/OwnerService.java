@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -29,9 +30,22 @@ public class OwnerService {
             "name", "email", "phone", "status"
     );
 
+    private static final Map<String, String> FILTER_VALUE_NOT_FOUND_MESSAGES = Map.of(
+            "name", "Owner not found for name '%s'",
+            "email", "Owner not found for email '%s'",
+            "phone", "Owner not found for phone '%s'",
+            "status", "Owner not found for status '%s'"
+    );
+
     public List<Owner> list(String tenantId, String filter) {
         List<Owner> tenantScopedOwners = ownerRepository.findByTenantId(tenantId);
-        return dynamicFilterEngine.apply(tenantScopedOwners, filter, Owner.class, FILTERABLE_FIELDS);
+        return dynamicFilterEngine.apply(
+                tenantScopedOwners,
+                filter,
+                Owner.class,
+                FILTERABLE_FIELDS,
+                FILTER_VALUE_NOT_FOUND_MESSAGES
+        );
     }
 
     public Owner create(String tenantId, CreateOwnerRequest req) {

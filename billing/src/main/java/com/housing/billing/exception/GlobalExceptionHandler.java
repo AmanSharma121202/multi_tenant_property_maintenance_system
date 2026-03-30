@@ -18,6 +18,13 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("NOT_FOUND", ex.getMessage()));
     }
 
+    // 404 - Filter value does not exist for the tenant-scoped dataset
+    @ExceptionHandler(FilterValueNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleFilterValueNotFound(FilterValueNotFoundException ex) {
+        return ResponseEntity.status(404)
+                .body(new ErrorResponse("FILTER_VALUE_NOT_FOUND", ex.getMessage()));
+    }
+
     // 400 - Validation failed (e.g. missing required field)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {

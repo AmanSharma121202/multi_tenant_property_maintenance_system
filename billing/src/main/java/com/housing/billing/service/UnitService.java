@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -27,12 +28,24 @@ public class UnitService {
     private final DynamicFilterEngine dynamicFilterEngine;
 
     private static final Set<String> FILTERABLE_FIELDS = Set.of(
-            "unitNumber", "profileCode", "active", "ownerId"
+            "unitNumber", "profileCode", "active"
+    );
+
+    private static final Map<String, String> FILTER_VALUE_NOT_FOUND_MESSAGES = Map.of(
+            "unitNumber", "Unit not found for unitNumber '%s'",
+            "profileCode", "Profile not found for profileCode '%s'",
+            "active", "Unit not found for active '%s'"
     );
 
     public List<Unit> list(String tenantId, String filter) {
         List<Unit> tenantScopedUnits = unitRepository.findByTenantId(tenantId);
-        return dynamicFilterEngine.apply(tenantScopedUnits, filter, Unit.class, FILTERABLE_FIELDS);
+        return dynamicFilterEngine.apply(
+                tenantScopedUnits,
+                filter,
+                Unit.class,
+                FILTERABLE_FIELDS,
+                FILTER_VALUE_NOT_FOUND_MESSAGES
+        );
     }
 
     public Unit create(String tenantId, CreateUnitRequest req) {

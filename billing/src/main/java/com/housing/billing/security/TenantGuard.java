@@ -48,6 +48,7 @@ public class TenantGuard implements HandlerInterceptor {
             return false;
         }
 
+
         String tokenTenantId = details.getTenantId();
 
         if (!pathTenantId.equals(tokenTenantId)) {

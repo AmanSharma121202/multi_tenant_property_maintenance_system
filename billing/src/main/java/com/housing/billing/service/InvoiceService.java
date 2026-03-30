@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -38,8 +39,15 @@ public class InvoiceService {
     private final DynamicFilterEngine dynamicFilterEngine;
 
     private static final Set<String> FILTERABLE_FIELDS = Set.of(
-            "unitId", "ownerId", "status", "year", "month", "issueDate", "dueDate",
-            "openingBalance", "currentCharges", "lateFee", "adjustments", "paymentsInPeriod", "closingBalance"
+            "year", "month", "status", "issueDate", "dueDate"
+    );
+
+    private static final Map<String, String> FILTER_VALUE_NOT_FOUND_MESSAGES = Map.ofEntries(
+            Map.entry("year", "Invoice not found for year '%s'"),
+            Map.entry("month", "Invoice not found for month '%s'"),
+            Map.entry("status", "Invoice not found for status '%s'"),
+            Map.entry("issueDate", "Invoice not found for issueDate '%s'"),
+            Map.entry("dueDate", "Invoice not found for dueDate '%s'")
     );
 
 
@@ -136,7 +144,13 @@ public class InvoiceService {
 
     public List<Invoice> list(String tenantId, String filter) {
         List<Invoice> tenantScopedInvoices = invoiceRepository.findAllByTenantId(tenantId);
-        return dynamicFilterEngine.apply(tenantScopedInvoices, filter, Invoice.class, FILTERABLE_FIELDS);
+        return dynamicFilterEngine.apply(
+                tenantScopedInvoices,
+                filter,
+                Invoice.class,
+                FILTERABLE_FIELDS,
+                FILTER_VALUE_NOT_FOUND_MESSAGES
+        );
     }
 
     public Invoice get(String tenantId, String invoiceId) {
