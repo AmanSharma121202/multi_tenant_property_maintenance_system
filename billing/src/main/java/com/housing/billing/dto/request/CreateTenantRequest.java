@@ -1,13 +1,46 @@
 package com.housing.billing.dto.request;
-import jakarta.validation.constraints.*;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import com.housing.billing.validation.AllowedConfigValue;
+import com.housing.billing.validation.AllowedValueType;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Data;
 
 @Data
 public class CreateTenantRequest {
-    @NotBlank private String name;
-    @NotBlank private String currency;    // e.g. INR
-    @NotNull  private Integer billingDay; // 1-28
-    private String lateFeeType;           // PERCENTAGE or FIXED
-    private double lateFeeValue;          // e.g. 2.0
+    @Schema(example = "Sunrise Residency")
+    @NotBlank(message = "name is required")
+    @Pattern(regexp = ".*\\S.*", message = "name cannot be blank")
+    private String name;
+    
+    @Schema(example = "INR")
+    @NotBlank(message = "currency is required")
+    @Pattern(regexp = "^[A-Z]{3}$", message = "currency must be a 3-letter ISO code")
+    @AllowedConfigValue(type = AllowedValueType.CURRENCY, message = "currency must be one of configured validCurrency values")
+    private String currency;    // e.g. INR
+    
+    @Schema(example = "5")
+    @NotNull(message = "billingDay is required")
+    @Min(value = 1, message = "billingDay must be between 1 and 28")
+    @Max(value = 28, message = "billingDay must be between 1 and 28")
+    private Integer billingDay;
+    
+    @Schema(example = "PERCENTAGE")
+    @NotBlank(message = "lateFeeType is required")
+    @AllowedConfigValue(type = AllowedValueType.LATE_FEE_TYPE, message = "lateFeeType must be one of configured validLateFeeType values")
+    private String lateFeeType;
+    
+    @Schema(example = "2.5")
+    @NotNull(message = "lateFeeValue is required")
+    @PositiveOrZero(message = "lateFeeValue must be zero or positive")
+    private Double lateFeeValue;
+    
+    @Schema(example = "Tower A, Main Street, Bengaluru")
+    @Pattern(regexp = "^$|.*\\S.*", message = "address cannot be blank")
     private String address;
 }

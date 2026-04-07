@@ -9,8 +9,11 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.lang.NonNull;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 @Component
 @RequiredArgsConstructor
@@ -19,8 +22,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response, FilterChain chain)
+    protected void doFilterInternal(@NonNull HttpServletRequest request,
+                                    @NonNull HttpServletResponse response,
+                                    @NonNull FilterChain chain)
             throws ServletException, IOException {
 
         String header = request.getHeader("Authorization");
@@ -32,14 +36,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (jwtUtil.isTokenValid(token)) {
                 Claims claims = jwtUtil.parseToken(token);
                 String email = claims.getSubject();
-                List<String> roles = claims.get("roles", List.class);
+                Object rawRoles = claims.get("roles");
 
                 // Extract tenantId from token claims
                 String tokenTenantId = claims.get("tenantId", String.class);
 
                 // Convert roles to Spring Security format
-                List<SimpleGrantedAuthority> authorities = roles.stream()
-                        .map(r -> new SimpleGrantedAuthority("ROLE_" + r))
+                List<String> safeRoles = toRoleList(rawRoles);
+                List<SimpleGrantedAuthority> authorities = safeRoles.stream()
+                        .map(this::normalizeRoleToAuthority)
+                        .filter(role -> !role.isBlank())
+                        .map(SimpleGrantedAuthority::new)
                         .toList();
 
                 // Tell Spring Security who this user is
@@ -53,5 +60,29 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             }
         }
         chain.doFilter(request, response);
+    }
+
+    private List<String> toRoleList(Object rawRoles) {
+        if (!(rawRoles instanceof List<?> roleList)) {
+            return Collections.emptyList();
+        }
+
+        return roleList.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(String::valueOf)
+                .toList();
+    }
+
+    private String normalizeRoleToAuthority(String role) {
+        if (role == null) {
+            return "";
+        }
+
+        String normalized = role.trim().toUpperCase(Locale.ROOT);
+        if (normalized.isBlank()) {
+            return "";
+        }
+
+        return normalized.startsWith("ROLE_") ? normalized : "ROLE_" + normalized;
     }
 }

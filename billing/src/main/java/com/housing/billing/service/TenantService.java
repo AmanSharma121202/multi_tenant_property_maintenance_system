@@ -17,23 +17,31 @@ import java.util.UUID;
 public class TenantService {
 
     private final TenantRepository tenantRepository;
+    private final ModelValidationService modelValidationService;
+
 
     public List<Tenant> list() {
         return tenantRepository.findAllTenants();
     }
 
     public Tenant create(CreateTenantRequest req) {
+        String normalizedName = req.getName().trim();
+        tenantRepository.findByNameIgnoreCase(normalizedName).ifPresent(existing -> {
+            throw new IllegalStateException("Tenant already exists");
+        });
+
         Tenant tenant = new Tenant();
         tenant.setId("tenant::" + UUID.randomUUID());
         tenant.setTenantId(tenant.getId());
-        tenant.setName(req.getName());
-        tenant.setCurrency(req.getCurrency());
+        tenant.setName(normalizedName);
+        tenant.setCurrency(req.getCurrency().trim());
         tenant.setBillingDay(req.getBillingDay());
-        tenant.setLateFeeType(req.getLateFeeType());
+        tenant.setLateFeeType(req.getLateFeeType().trim());
         tenant.setLateFeeValue(req.getLateFeeValue());
-        tenant.setAddress(req.getAddress());
+        tenant.setAddress(req.getAddress() == null ? null : req.getAddress().trim());
         tenant.setType("tenant");
         tenant.setCreatedAt(Instant.now());
+        modelValidationService.validate(tenant);
         return tenantRepository.save(tenant);
     }
 
@@ -51,6 +59,7 @@ public class TenantService {
         if (req.getLateFeeValue() != null) tenant.setLateFeeValue(req.getLateFeeValue());
         if (req.getAddress()      != null) tenant.setAddress(req.getAddress());
         tenant.setUpdatedAt(Instant.now());
+        modelValidationService.validate(tenant);
         return tenantRepository.save(tenant);
     }
 }

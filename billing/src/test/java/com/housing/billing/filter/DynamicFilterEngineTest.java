@@ -146,6 +146,30 @@ class DynamicFilterEngineTest {
     }
 
     @Test
+    void throwsWhenCombinedEqFiltersProduceNoMatchingRows() {
+        List<FakeInvoice> source = List.of(
+                new FakeInvoice("A-101", "PAID", true, 1, BigDecimal.valueOf(100), Instant.parse("2025-01-01T00:00:00Z")),
+                new FakeInvoice("A-102", "OVERDUE", true, 1, BigDecimal.valueOf(200), Instant.parse("2025-01-02T00:00:00Z"))
+        );
+
+        FilterValueNotFoundException ex = assertThrows(
+                FilterValueNotFoundException.class,
+                () -> engine.apply(
+                        source,
+                        "unitNumber==\"A-101\" && status==\"OVERDUE\"",
+                        FakeInvoice.class,
+                        Set.of("unitNumber", "status", "active", "month", "amount", "issueDate"),
+                        Map.of(
+                                "unitNumber", "Unit not found for unitNumber '%s'",
+                                "status", "Invoice not found for status '%s'"
+                        )
+                )
+        );
+
+        assertEquals("Unit not found for unitNumber 'A-101'", ex.getMessage());
+    }
+
+    @Test
     void throwsComparatorNotFoundForLessThanOrEqualWhenEmpty() {
         List<FakeInvoice> source = List.of(
                 new FakeInvoice("A101", "PAID", true, 1, BigDecimal.valueOf(100), Instant.parse("2025-01-01T00:00:00Z"))

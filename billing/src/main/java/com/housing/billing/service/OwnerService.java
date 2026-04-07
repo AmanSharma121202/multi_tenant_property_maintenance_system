@@ -1,9 +1,9 @@
 package com.housing.billing.service;
 
 import com.housing.billing.dto.request.CreateOwnerRequest;
-import com.housing.billing.dto.request.LinkOwnerRequest;
 import com.housing.billing.dto.request.UpdateOwnerRequest;
 import com.housing.billing.exception.ResourceNotFoundException;
+import com.housing.billing.exception.TenantIsolationException;
 import com.housing.billing.filter.DynamicFilterEngine;
 import com.housing.billing.model.Owner;
 import com.housing.billing.model.Unit;
@@ -25,10 +25,12 @@ public class OwnerService {
     private final OwnerRepository ownerRepository;
     private final UnitRepository  unitRepository;
     private final DynamicFilterEngine dynamicFilterEngine;
+    private final ModelValidationService modelValidationService;
 
     private static final Set<String> FILTERABLE_FIELDS = Set.of(
             "name", "email", "phone", "status"
     );
+
 
     private static final Map<String, String> FILTER_VALUE_NOT_FOUND_MESSAGES = Map.of(
             "name", "Owner not found for name '%s'",
@@ -49,23 +51,34 @@ public class OwnerService {
     }
 
     public Owner create(String tenantId, CreateOwnerRequest req) {
+        String normalizedEmail = req.getEmail().trim();
+        ownerRepository.findByTenantIdAndEmailIgnoreCase(tenantId, normalizedEmail).ifPresent(existing -> {
+            throw new IllegalStateException("Owner already exists");
+        });
+
         Owner owner = new Owner();
         owner.setId("owner::" + UUID.randomUUID());
         owner.setTenantId(tenantId);
-        owner.setName(req.getName());
-        owner.setEmail(req.getEmail());
-        owner.setPhone(req.getPhone());
-        owner.setStatus(req.getStatus() != null ? req.getStatus() : "ACTIVE");
+        owner.setName(req.getName().trim());
+        owner.setEmail(normalizedEmail);
+        owner.setPhone(req.getPhone() == null ? null : req.getPhone().trim());
+        owner.setStatus(req.getStatus() != null ? req.getStatus().trim() : "ACTIVE");
         owner.setUnitIds(new ArrayList<>());
         owner.setType("owner");
         owner.setCreatedAt(Instant.now());
+        modelValidationService.validate(owner);
         return ownerRepository.save(owner);
     }
 
     public Owner get(String tenantId, String ownerId) {
-        return ownerRepository.findById(ownerId)
-                .filter(owner -> tenantId.equals(owner.getTenantId()))
+        Owner owner = ownerRepository.findById(ownerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Owner not found"));
+
+        if (!tenantId.equals(owner.getTenantId())) {
+            throw new TenantIsolationException("Tenant isolation violation");
+        }
+
+        return owner;
     }
 
     public Owner update(String tenantId, String ownerId, UpdateOwnerRequest req) {
@@ -75,6 +88,7 @@ public class OwnerService {
         if (req.getPhone()  != null) owner.setPhone(req.getPhone());
         if (req.getStatus() != null) owner.setStatus(req.getStatus());
         owner.setUpdatedAt(Instant.now());
+        modelValidationService.validate(owner);
         return ownerRepository.save(owner);
     }
 
@@ -85,8 +99,11 @@ public class OwnerService {
 
         // Load the unit
         Unit unit = unitRepository.findById(unitId)
-                .filter(foundUnit -> tenantId.equals(foundUnit.getTenantId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Unit not found"));
+
+        if (!tenantId.equals(unit.getTenantId())) {
+            throw new TenantIsolationException("Tenant isolation violation");
+        }
 
         // If unit already linked to THIS owner -> idempotent
         if (ownerId.equals(unit.getOwnerId())) {
@@ -115,11 +132,13 @@ public class OwnerService {
             owner.getUnitIds().add(unitId);
         }
         owner.setUpdatedAt(Instant.now());
+        modelValidationService.validate(owner);
         ownerRepository.save(owner);
 
         // 2) Update unit
         unit.setOwnerId(ownerId);
         unit.setUpdatedAt(Instant.now());
+        modelValidationService.validate(unit);
         unitRepository.save(unit);
 
         return owner;
@@ -130,8 +149,11 @@ public class OwnerService {
     public Owner unlinkUnit(String tenantId, String ownerId, String unitId) {
         Owner owner = get(tenantId, ownerId);
         Unit unit = unitRepository.findById(unitId)
-                .filter(foundUnit -> tenantId.equals(foundUnit.getTenantId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Unit not found"));
+
+        if (!tenantId.equals(unit.getTenantId())) {
+            throw new TenantIsolationException("Tenant isolation violation");
+        }
 
         // Remove unitId from owner's list
         if (owner.getUnitIds() != null) {
@@ -141,9 +163,11 @@ public class OwnerService {
         // Clear ownerId on the unit document
         unit.setOwnerId(null);
         unit.setUpdatedAt(Instant.now());
+        modelValidationService.validate(unit);
         unitRepository.save(unit);
 
         owner.setUpdatedAt(Instant.now());
+        modelValidationService.validate(owner);
         return ownerRepository.save(owner);
     }
 

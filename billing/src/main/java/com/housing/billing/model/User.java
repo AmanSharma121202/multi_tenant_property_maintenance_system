@@ -1,6 +1,9 @@
 package com.housing.billing.model;
-
-import com.housing.billing.model.BaseDocument;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.springframework.data.annotation.Id;
@@ -19,9 +22,17 @@ public class User extends BaseDocument {
 
     @Id
     private String       id;
+    @NotBlank(message = "Email is required")
+    @Email(message = "Email must be valid")
     private String       email;
+    @NotBlank(message = "passwordHash is required")
     private String       passwordHash;  // Always store BCrypt hash, never plaintext
+    @NotBlank(message = "Name is required")
+    @Size(max = 100, message = "Name must not exceed 100 characters")
     private String       name;
-    private List<String> roles;         // TENANT_ADMIN, CSR, SUPERADMIN
+    @NotEmpty(message = "At least one role is required")
+    @Size(max = 5, message = "Roles must not exceed 5 entries")
+    private List<@Pattern(regexp = "^(SUPERADMIN|TENANT_ADMIN|CSR|OWNER)$",
+            message = "Invalid role value") String> roles;
     private boolean      active;
 }

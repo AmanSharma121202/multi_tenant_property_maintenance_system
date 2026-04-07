@@ -1,6 +1,8 @@
 package com.housing.billing.model;
 
 import com.housing.billing.model.BaseDocument;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.springframework.data.annotation.Id;
@@ -18,8 +20,13 @@ public class Unit extends BaseDocument {
     @Id
     private String id;
 
+    @NotBlank(message = "Unit number is required")
+    @Pattern(regexp = ".*\\S.*", message = "Unit number cannot be blank")
     private String  unitNumber;   // e.g. "A-101", "B-202"
+    @NotBlank(message = "Profile code is required")
+    @Pattern(regexp = ".*\\S.*", message = "Profile code cannot be blank")
     private String  profileCode;  // Links to Profile.code
+    @Pattern(regexp = "^$|^owner::.+$", message = "Invalid ownerId format")
     private String  ownerId;      // Set when an owner is linked to this unit
     private boolean active;
 }

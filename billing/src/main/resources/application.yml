@@ -16,6 +16,8 @@ app:
   jwt:
     secret: ThisIsAVeryLongSecretKeyForJWTTokenGeneration256BitsMinimum!!
     expiration-ms: 86400000
+  billing:
+    payment-terms-days: 15
 
 springdoc:
   api-docs:
@@ -27,3 +29,11 @@ logging:
   level:
     com.housing.billing: DEBUG
     org.springframework.data.couchbase: DEBUG
+com:
+  housing:
+    billing:
+      tenant:
+        validCurrency: [INR, USD, EUR, GBP]
+        validLateFeeType: [PERCENTAGE, FIXED, NONE]
+        validProfileCode: [1BHK, 2BHK, 3BHK, VILLA]
+        validCode: [1BHK, 2BHK, 3BHK, VILLA]

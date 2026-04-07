@@ -1,7 +1,7 @@
 package com.housing.billing.controller;
 
 import com.housing.billing.dto.request.CreateOwnerRequest;
-import com.housing.billing.dto.request.LinkOwnerRequest;
+import com.housing.billing.dto.request.LinkUnitRequest;
 import com.housing.billing.dto.request.UpdateOwnerRequest;
 import com.housing.billing.model.Owner;
 import com.housing.billing.service.OwnerService;
@@ -52,17 +52,15 @@ public class OwnerController {
     @PostMapping("/{ownerId}:link-unit")
     public ResponseEntity<Owner> linkUnit(@PathVariable String tenantId,
                                           @PathVariable String ownerId,
-                                          @RequestBody java.util.Map<String, String> body) {
-        String unitId = body.get("unitId");
-        return ResponseEntity.ok(ownerService.linkUnit(tenantId, ownerId, unitId));
+                                          @Valid @RequestBody LinkUnitRequest req) {
+        return ResponseEntity.ok(ownerService.linkUnit(tenantId, ownerId, req.getUnitId()));
     }
 
     // Unlink a unit from this owner — body contains unitId
     @PostMapping("/{ownerId}:unlink-unit")
     public ResponseEntity<Owner> unlinkUnit(@PathVariable String tenantId,
                                             @PathVariable String ownerId,
-                                            @RequestBody java.util.Map<String, String> body) {
-        String unitId = body.get("unitId");
-        return ResponseEntity.ok(ownerService.unlinkUnit(tenantId, ownerId, unitId));
+                                            @Valid @RequestBody LinkUnitRequest req) {
+        return ResponseEntity.ok(ownerService.unlinkUnit(tenantId, ownerId, req.getUnitId()));
     }
 }

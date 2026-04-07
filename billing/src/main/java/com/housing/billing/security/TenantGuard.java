@@ -1,5 +1,6 @@
 package com.housing.billing.security;
 
+import com.housing.billing.exception.TenantIsolationException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.Authentication;
@@ -52,8 +53,7 @@ public class TenantGuard implements HandlerInterceptor {
         String tokenTenantId = details.getTenantId();
 
         if (!pathTenantId.equals(tokenTenantId)) {
-            res.sendError(HttpServletResponse.SC_FORBIDDEN, "Tenant mismatch");
-            return false;
+            throw new TenantIsolationException("Tenant isolation violation");
         }
 
         return true;

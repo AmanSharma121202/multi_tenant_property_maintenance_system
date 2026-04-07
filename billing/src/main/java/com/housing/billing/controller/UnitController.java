@@ -7,14 +7,18 @@ import com.housing.billing.model.Unit;
 import com.housing.billing.service.UnitService;
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
 @RequestMapping("/tenants/{tenantId}/units")
 @RequiredArgsConstructor
+@Validated
 public class UnitController {
     private final UnitService unitService;
 
@@ -37,20 +41,26 @@ public class UnitController {
 
     @GetMapping("/{unitId}")
     public ResponseEntity<Unit> get(@PathVariable String tenantId,
-                                    @PathVariable String unitId) {
+                                    @PathVariable
+                                    @NotBlank(message = "unitId is required")
+                                    @Pattern(regexp = "^unit::.+$", message = "Invalid unitId format") String unitId) {
         return ResponseEntity.ok(unitService.get(tenantId, unitId));
     }
 
     @PatchMapping("/{unitId}")
     public ResponseEntity<Unit> update(@PathVariable String tenantId,
-                                       @PathVariable String unitId,
+                                       @PathVariable
+                                       @NotBlank(message = "unitId is required")
+                                       @Pattern(regexp = "^unit::.+$", message = "Invalid unitId format") String unitId,
                                        @Valid @RequestBody UpdateUnitRequest req) {
         return ResponseEntity.ok(unitService.update(tenantId, unitId, req));
     }
 
     @DeleteMapping("/{unitId}")
-    public ResponseEntity<Void> delete(@PathVariable String tenantId,
-                                       @PathVariable String unitId) {
+    public ResponseEntity<Void> delete(
+            @PathVariable @NotBlank(message = "tenantId is required") String tenantId,
+            @PathVariable
+            @NotBlank(message = "unitId is required") String unitId) {
         unitService.deactivate(tenantId, unitId);
         return ResponseEntity.noContent().build();
     }

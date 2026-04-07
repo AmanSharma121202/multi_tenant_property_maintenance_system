@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 
 import com.housing.billing.dto.request.GenerateInvoiceRequest;
 import com.housing.billing.exception.ResourceNotFoundException;
+import com.housing.billing.exception.TenantIsolationException;
 import com.housing.billing.filter.DynamicFilterEngine;
 import com.housing.billing.model.Invoice;
 import com.housing.billing.model.Profile;
@@ -33,10 +34,11 @@ public class InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final UnitRepository unitRepository;
     private final ProfileRepository profileRepository;
-    @Value("${app.billing.grace-days:15}")
-    private int graceDays;  // default 15 if not provided
+    @Value("${app.billing.payment-terms-days:${app.billing.grace-days:15}}")
+    private int paymentTermsDays;  // backward compatible with app.billing.grace-days
     private final TenantRepository tenantRepository;
     private final DynamicFilterEngine dynamicFilterEngine;
+    private final ModelValidationService modelValidationService;
 
     private static final Set<String> FILTERABLE_FIELDS = Set.of(
             "year", "month", "status", "issueDate", "dueDate"
@@ -60,7 +62,10 @@ public class InvoiceService {
 
         // 2. If already generated, return existing invoice
         Optional<Invoice> existing = invoiceRepository.findById(invoiceId);
-        if (existing.isPresent() && tenantId.equals(existing.get().getTenantId())) {
+        if (existing.isPresent()) {
+            if (!tenantId.equals(existing.get().getTenantId())) {
+                throw new TenantIsolationException("Tenant isolation violation");
+            }
             return existing.get();
         }
 
@@ -76,6 +81,9 @@ public class InvoiceService {
         // 4. Get monthly charge amount from the unit's assigned profile
         Unit unit = unitRepository.findById(req.getUnitId())
                 .orElseThrow(() -> new ResourceNotFoundException("Unit not found"));
+        if (!tenantId.equals(unit.getTenantId())) {
+            throw new TenantIsolationException("Tenant isolation violation");
+        }
         Profile profile = profileRepository.findByTenantIdAndCode(tenantId, unit.getProfileCode())
                 .orElseThrow(() -> new ResourceNotFoundException("Profile not found"));
 
@@ -104,40 +112,32 @@ public class InvoiceService {
         invoice.setClosingBalance(closing);
         invoice.setStatus(closing.compareTo(BigDecimal.ZERO) <= 0 ? "PAID" : "OVERDUE");
 
-       //Use request-provided dates if present
-        Instant issueDate = req.getIssueDate();
-        Instant dueDate   = req.getDueDate();
+        // Keep manual values if provided; auto-compute only for null fields.
+        Instant resolvedIssueDate = req.getIssueDate();
+        Instant resolvedDueDate = req.getDueDate();
 
-        if (issueDate == null || dueDate == null) {
-            // Load tenant to determine billingDay
+        if (resolvedIssueDate == null) {
             Tenant tenant = tenantRepository.findById(tenantId)
                     .orElseThrow(() -> new ResourceNotFoundException("Tenant not found"));
 
-            int billingDay = tenant.getBillingDay(); // expected 1–28
-
-            // Defensive clamp
-            if (billingDay < 1)  billingDay = 1;
+            int billingDay = tenant.getBillingDay(); // expected 1-28
+            if (billingDay < 1) billingDay = 1;
             if (billingDay > 28) billingDay = 28;
 
-            // Compute issueDate = YYYY-MM-billingDay @ 00:00Z
             LocalDate localIssue = LocalDate.of(req.getYear(), req.getMonth(), billingDay);
-            Instant computedIssue = localIssue.atStartOfDay().toInstant(ZoneOffset.UTC);
-
-            if (issueDate == null) {
-                issueDate = computedIssue;
-            }
-
-            if (dueDate == null) {
-                // dueDate = issueDate + graceDays
-                dueDate = computedIssue.plus(graceDays, ChronoUnit.DAYS);
-            }
+            resolvedIssueDate = localIssue.atStartOfDay().toInstant(ZoneOffset.UTC);
         }
 
-        invoice.setIssueDate(issueDate);
-        invoice.setDueDate(dueDate);
+        if (resolvedDueDate == null) {
+            resolvedDueDate = resolvedIssueDate.plus(paymentTermsDays, ChronoUnit.DAYS);
+        }
+
+        invoice.setIssueDate(resolvedIssueDate);
+        invoice.setDueDate(resolvedDueDate);
         invoice.setType("invoice");
         invoice.setTenantId(tenantId);
         invoice.setCreatedAt(Instant.now());
+        modelValidationService.validate(invoice);
 
         return invoiceRepository.save(invoice);
     }
@@ -154,16 +154,24 @@ public class InvoiceService {
     }
 
     public Invoice get(String tenantId, String invoiceId) {
-        return invoiceRepository.findById(invoiceId)
-                .filter(inv -> tenantId.equals(inv.getTenantId()))
+        Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice not found"));
+
+        if (!tenantId.equals(invoice.getTenantId())) {
+            throw new TenantIsolationException("Tenant isolation violation");
+        }
+
+        return invoice;
     }
 
     // Called after a payment is recorded
     public Invoice recalculate(String tenantId, String invoiceId) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
-                .filter(foundInvoice -> tenantId.equals(foundInvoice.getTenantId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice not found"));
+
+        if (!tenantId.equals(invoice.getTenantId())) {
+            throw new TenantIsolationException("Tenant isolation violation");
+        }
 
         BigDecimal closing = invoice.getOpeningBalance()
                 .add(invoice.getCurrentCharges())

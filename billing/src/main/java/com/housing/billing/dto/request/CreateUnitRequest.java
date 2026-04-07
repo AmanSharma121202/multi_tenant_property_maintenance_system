@@ -1,15 +1,25 @@
 package com.housing.billing.dto.request;
 
+import com.housing.billing.validation.AllowedConfigValue;
+import com.housing.billing.validation.AllowedValueType;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 @Data
 public class CreateUnitRequest {
-    @NotBlank(message = "Unit number is required")
+    @Schema(example = "A-101")
+    @NotBlank(message = "unitNumber is required")
+    @Pattern(regexp = ".*\\S.*", message = "unitNumber cannot be blank")
     private String unitNumber;
 
-    @NotBlank(message = "Profile code is required")
+    @Schema(example = "2BHK")
+    @NotBlank(message = "profileCode is required")
+    @Pattern(regexp = ".*\\S.*", message = "profileCode cannot be blank")
+    @AllowedConfigValue(type = AllowedValueType.PROFILE_CODE, message = "profileCode must be one of configured validProfileCode values")
     private String profileCode;
 
+    @Schema(example = "true")
     private boolean active = true;
 }

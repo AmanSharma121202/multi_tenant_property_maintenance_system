@@ -1,10 +1,29 @@
 package com.housing.billing.dto.request;
+
+import com.housing.billing.validation.AllowedConfigValue;
+import com.housing.billing.validation.AllowedValueType;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import lombok.Data;
+
 import java.math.BigDecimal;
 
 @Data
 public class UpdateProfileRequest {
-    private String     label;
+    @Schema(example = "2BHK")
+    @Pattern(regexp = ".*\\S.*", message = "code cannot be blank")
+    @AllowedConfigValue(type = AllowedValueType.CODE, message = "code must be one of configured validCode values")
+    private String code;
+
+    @Schema(example = "2BHK Deluxe")
+    @Pattern(regexp = ".*\\S.*", message = "label cannot be blank")
+    private String label;
+
+    @Schema(example = "12500")
+    @Positive(message = "monthlyAmount must be greater than 0")
     private BigDecimal monthlyAmount;
-    private Boolean    active;
+
+    @Schema(example = "true")
+    private Boolean active;
 }

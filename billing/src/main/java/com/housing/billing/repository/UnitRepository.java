@@ -5,6 +5,7 @@ import org.springframework.data.couchbase.repository.CouchbaseRepository;
 import org.springframework.data.couchbase.repository.Query;
 import org.springframework.stereotype.Repository;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface UnitRepository extends CouchbaseRepository<Unit, String> {
@@ -18,6 +19,11 @@ public interface UnitRepository extends CouchbaseRepository<Unit, String> {
             " FROM `prop-tax`.`main`.`units` u" +
             " WHERE u.tenantId = $1 AND LOWER(u.unitNumber) LIKE LOWER($2)")
     List<Unit> findByTenantIdAndUnitNumber(String tenantId, String unitNumber);
+
+    @Query("SELECT META().id AS __id, META().cas AS __cas, u.*" +
+            " FROM `prop-tax`.`main`.`units` u" +
+            " WHERE u.tenantId = $1 AND LOWER(u.unitNumber) = LOWER($2) LIMIT 1")
+    Optional<Unit> findByTenantIdAndUnitNumberIgnoreCase(String tenantId, String unitNumber);
 
     @Query("SELECT META().id AS __id, META().cas AS __cas, u.*" +
             " FROM `prop-tax`.`main`.`units` u" +

@@ -42,7 +42,7 @@ public class DynamicFilterEngine {
         validateFilterValues(root, source, fields, allowedFields, valueNotFoundMessages, new HashSet<>());
         Predicate<T> predicate = buildPredicate(root, type, allowedFields);
         List<T> filtered = source.stream().filter(predicate).toList();
-        throwIfComparatorResultIsEmpty(root, filtered);
+        throwIfComparatorResultIsEmpty(root, filtered, valueNotFoundMessages);
         return filtered;
     }
 
@@ -94,29 +94,54 @@ public class DynamicFilterEngine {
         throw new FilterValueNotFoundException(message);
     }
 
-    private <T> void throwIfComparatorResultIsEmpty(FilterExpressionParser.Node node, List<T> filtered) {
+    private <T> void throwIfComparatorResultIsEmpty(FilterExpressionParser.Node node,
+                                                    List<T> filtered,
+                                                    Map<String, String> valueNotFoundMessages) {
         if (!filtered.isEmpty()) {
             return;
         }
 
         FilterExpressionParser.ConditionNode condition = findFirstComparatorCondition(node);
-        if (condition == null) {
-            return;
+        if (condition != null) {
+            String input = literalToMessageValue(condition.literal());
+            String message = switch (condition.operator()) {
+                case LTE -> "Not found value less than or equal to " + input;
+                case GTE -> "Not found value greater than or equal to " + input;
+                case LT -> "Not found value less than " + input;
+                case GT -> "Not found value greater than " + input;
+                case NE -> "Not found value not equal to " + input;
+                default -> null;
+            };
+
+            if (message != null) {
+                throw new FilterValueNotFoundException(message);
+            }
         }
 
-        String input = literalToMessageValue(condition.literal());
-        String message = switch (condition.operator()) {
-            case LTE -> "Not found value less than or equal to " + input;
-            case GTE -> "Not found value greater than or equal to " + input;
-            case LT -> "Not found value less than " + input;
-            case GT -> "Not found value greater than " + input;
-            case NE -> "Not found value not equal to " + input;
-            default -> null;
-        };
-
-        if (message != null) {
-            throw new FilterValueNotFoundException(message);
+        FilterExpressionParser.ConditionNode eqCondition = findFirstConfiguredEqCondition(node, valueNotFoundMessages);
+        if (eqCondition != null) {
+            String template = valueNotFoundMessages.get(eqCondition.field());
+            String value = literalToMessageValue(eqCondition.literal());
+            String eqMessage = template.contains("%s") ? String.format(template, value) : template;
+            throw new FilterValueNotFoundException(eqMessage);
         }
+    }
+
+    private FilterExpressionParser.ConditionNode findFirstConfiguredEqCondition(FilterExpressionParser.Node node,
+                                                                                Map<String, String> valueNotFoundMessages) {
+        if (node instanceof FilterExpressionParser.LogicalNode logicalNode) {
+            FilterExpressionParser.ConditionNode left = findFirstConfiguredEqCondition(logicalNode.left(), valueNotFoundMessages);
+            if (left != null) {
+                return left;
+            }
+            return findFirstConfiguredEqCondition(logicalNode.right(), valueNotFoundMessages);
+        }
+
+        FilterExpressionParser.ConditionNode condition = (FilterExpressionParser.ConditionNode) node;
+        if (condition.operator() == ComparisonOperator.EQ && valueNotFoundMessages.containsKey(condition.field())) {
+            return condition;
+        }
+        return null;
     }
 
     private FilterExpressionParser.ConditionNode findFirstComparatorCondition(FilterExpressionParser.Node node) {
