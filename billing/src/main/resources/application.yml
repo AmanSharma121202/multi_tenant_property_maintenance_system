@@ -18,6 +18,13 @@ app:
     expiration-ms: 86400000
   billing:
     payment-terms-days: 15
+  async:
+    invoice-generation:
+      core-pool-size: 4
+      max-pool-size: 8
+      queue-capacity: 200
+      retention-days: 30
+      cleanup-cron: "0 30 0 * * *"
 
 springdoc:
   api-docs:
