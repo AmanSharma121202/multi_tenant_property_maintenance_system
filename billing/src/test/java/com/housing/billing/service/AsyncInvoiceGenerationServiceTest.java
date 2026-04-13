@@ -12,12 +12,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -35,7 +35,7 @@ class AsyncInvoiceGenerationServiceTest {
     private ModelValidationService modelValidationService;
 
     @Test
-    void submit_existingNaturalKeyJob_returnsExistingWithoutReprocessing() {
+    void enqueue_existingNaturalKeyJob_returnsExistingWithoutReprocessing() {
         GenerateInvoiceRequest req = baseRequest();
         String jobId = "inv-job::tenant::1::unit::101::202604";
 
@@ -56,7 +56,7 @@ class AsyncInvoiceGenerationServiceTest {
                 Runnable::run
         );
 
-        InvoiceGenerationJobResponse response = service.submit("tenant::1", req);
+        InvoiceGenerationJobResponse response = service.enqueue("tenant::1", req);
 
         assertEquals(jobId, response.getJobId());
         assertEquals("SUCCEEDED", response.getStatus());
@@ -65,7 +65,7 @@ class AsyncInvoiceGenerationServiceTest {
     }
 
     @Test
-    void submit_newJob_persistsAndTransitionsToSucceeded() {
+    void enqueue_newJob_persistsAsSubmittedWithoutImmediateProcessing() {
         GenerateInvoiceRequest req = baseRequest();
         String jobId = "inv-job::tenant::1::unit::101::202604";
 
@@ -74,6 +74,43 @@ class AsyncInvoiceGenerationServiceTest {
             String id = invocation.getArgument(0, String.class);
             return Optional.ofNullable(jobStore.get(id));
         });
+        when(jobRepository.save(any(InvoiceGenerationJob.class))).thenAnswer(invocation -> {
+            InvoiceGenerationJob job = invocation.getArgument(0, InvoiceGenerationJob.class);
+            jobStore.put(job.getId(), job);
+            return job;
+        });
+
+        AsyncInvoiceGenerationService service = new AsyncInvoiceGenerationService(
+                jobRepository,
+                invoiceService,
+                modelValidationService,
+                Runnable::run
+        );
+
+        InvoiceGenerationJobResponse response = service.enqueue("tenant::1", req);
+
+        assertEquals(jobId, response.getJobId());
+        assertEquals("SUBMITTED", response.getStatus());
+
+        InvoiceGenerationJob persisted = jobStore.get(jobId);
+        assertNotNull(persisted);
+        assertEquals("SUBMITTED", persisted.getStatus());
+
+        verify(invoiceService, never()).generate(eq("tenant::1"), any(GenerateInvoiceRequest.class));
+        verify(modelValidationService).validate(any(InvoiceGenerationJob.class));
+    }
+
+    @Test
+    void dispatchSubmittedJobs_processesQueuedJobs() {
+        GenerateInvoiceRequest req = baseRequest();
+        String jobId = "inv-job::tenant::1::unit::101::202604";
+
+        Map<String, InvoiceGenerationJob> jobStore = new HashMap<>();
+        when(jobRepository.findById(any())).thenAnswer(invocation -> {
+            String id = invocation.getArgument(0, String.class);
+            return Optional.ofNullable(jobStore.get(id));
+        });
+        when(jobRepository.findAll()).thenAnswer(invocation -> List.copyOf(jobStore.values()));
         when(jobRepository.save(any(InvoiceGenerationJob.class))).thenAnswer(invocation -> {
             InvoiceGenerationJob job = invocation.getArgument(0, InvoiceGenerationJob.class);
             jobStore.put(job.getId(), job);
@@ -91,18 +128,14 @@ class AsyncInvoiceGenerationServiceTest {
                 Runnable::run
         );
 
-        InvoiceGenerationJobResponse response = service.submit("tenant::1", req);
-
-        assertEquals(jobId, response.getJobId());
-        assertTrue("SUBMITTED".equals(response.getStatus()) || "SUCCEEDED".equals(response.getStatus()));
+        service.enqueue("tenant::1", req);
+        service.dispatchSubmittedJobs(10);
 
         InvoiceGenerationJob persisted = jobStore.get(jobId);
         assertNotNull(persisted);
         assertEquals("SUCCEEDED", persisted.getStatus());
         assertEquals("INV-unit::101-202604", persisted.getInvoiceId());
-
         verify(invoiceService).generate(eq("tenant::1"), any(GenerateInvoiceRequest.class));
-        verify(modelValidationService).validate(any(InvoiceGenerationJob.class));
     }
 
     private GenerateInvoiceRequest baseRequest() {

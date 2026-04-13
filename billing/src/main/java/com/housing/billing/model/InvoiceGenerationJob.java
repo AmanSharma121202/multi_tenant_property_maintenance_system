@@ -38,6 +38,9 @@ public class InvoiceGenerationJob extends BaseDocument {
     @Max(value = 12, message = "Month must be between 1 and 12")
     private Integer month;
 
+    private Instant issueDate;
+    private Instant dueDate;
+
     @NotBlank(message = "status is required")
     @Pattern(regexp = "^(SUBMITTED|RUNNING|SUCCEEDED|FAILED)$",
             message = "Status must be one of: SUBMITTED, RUNNING, SUCCEEDED, FAILED")

@@ -24,7 +24,7 @@ public class InvoiceController {
     @PostMapping(":generate")
     public ResponseEntity<InvoiceGenerationJobResponse> generate(@PathVariable String tenantId,
                                                                  @Valid @RequestBody GenerateInvoiceRequest req) {
-        InvoiceGenerationJobResponse response = asyncInvoiceGenerationService.submit(tenantId, req);
+        InvoiceGenerationJobResponse response = asyncInvoiceGenerationService.enqueue(tenantId, req);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 

@@ -11,6 +11,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -37,7 +39,7 @@ public class AsyncInvoiceGenerationService {
         this.invoiceGenerationExecutor = invoiceGenerationExecutor;
     }
 
-    public InvoiceGenerationJobResponse submit(String tenantId, GenerateInvoiceRequest req) {
+    public InvoiceGenerationJobResponse enqueue(String tenantId, GenerateInvoiceRequest req) {
         String jobId = buildNaturalJobId(tenantId, req);
         Optional<InvoiceGenerationJob> existing = jobRepository.findById(jobId);
         if (existing.isPresent()) {
@@ -52,16 +54,25 @@ public class AsyncInvoiceGenerationService {
         job.setUnitId(req.getUnitId());
         job.setYear(req.getYear());
         job.setMonth(req.getMonth());
+        job.setIssueDate(req.getIssueDate());
+        job.setDueDate(req.getDueDate());
         job.setStatus("SUBMITTED");
         job.setCreatedAt(Instant.now());
         job.setUpdatedAt(Instant.now());
         modelValidationService.validate(job);
 
         InvoiceGenerationJob saved = jobRepository.save(job);
-        GenerateInvoiceRequest requestSnapshot = copyRequest(req);
-        startGenerationInBackground(saved.getId(), tenantId, requestSnapshot);
-
         return toResponse(saved);
+    }
+
+    public void dispatchSubmittedJobs(int batchSize) {
+        List<InvoiceGenerationJob> submittedJobs = jobRepository.findAll().stream()
+                .filter(job -> "SUBMITTED".equals(job.getStatus()))
+                .sorted(Comparator.comparing(InvoiceGenerationJob::getCreatedAt))
+                .limit(Math.max(batchSize, 1))
+                .toList();
+
+        submittedJobs.forEach(job -> startGenerationInBackground(job.getId(), job.getTenantId(), requestFromJob(job)));
     }
 
     public InvoiceGenerationJobResponse getStatus(String tenantId, String jobId) {
@@ -87,6 +98,10 @@ public class AsyncInvoiceGenerationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice generation job not found"));
         ensureTenant(tenantId, running);
 
+        if (!"SUBMITTED".equals(running.getStatus())) {
+            return null;
+        }
+
         running.setStatus("RUNNING");
         running.setStartedAt(Instant.now());
         running.setUpdatedAt(Instant.now());
@@ -106,6 +121,9 @@ public class AsyncInvoiceGenerationService {
     }
 
     private void markSucceeded(String jobId, String invoiceId) {
+        if (invoiceId == null) {
+            return;
+        }
         InvoiceGenerationJob job = jobRepository.findById(jobId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice generation job not found"));
         job.setStatus("SUCCEEDED");
@@ -130,14 +148,14 @@ public class AsyncInvoiceGenerationService {
         return String.format("inv-job::%s::%s::%d%02d", tenantId, req.getUnitId(), req.getYear(), req.getMonth());
     }
 
-    private GenerateInvoiceRequest copyRequest(GenerateInvoiceRequest req) {
-        GenerateInvoiceRequest copy = new GenerateInvoiceRequest();
-        copy.setUnitId(req.getUnitId());
-        copy.setYear(req.getYear());
-        copy.setMonth(req.getMonth());
-        copy.setIssueDate(req.getIssueDate());
-        copy.setDueDate(req.getDueDate());
-        return copy;
+    private GenerateInvoiceRequest requestFromJob(InvoiceGenerationJob job) {
+        GenerateInvoiceRequest request = new GenerateInvoiceRequest();
+        request.setUnitId(job.getUnitId());
+        request.setYear(job.getYear());
+        request.setMonth(job.getMonth());
+        request.setIssueDate(job.getIssueDate());
+        request.setDueDate(job.getDueDate());
+        return request;
     }
 
     private void ensureTenant(String tenantId, InvoiceGenerationJob job) {

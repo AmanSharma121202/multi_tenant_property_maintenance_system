@@ -23,6 +23,8 @@ app:
       core-pool-size: 4
       max-pool-size: 8
       queue-capacity: 200
+      dispatch-batch-size: 20
+      dispatch-cron: "0 */1 * * * *"
       retention-days: 30
       cleanup-cron: "0 30 0 * * *"
 
