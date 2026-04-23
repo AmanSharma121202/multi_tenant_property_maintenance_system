@@ -22,10 +22,13 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -107,6 +110,52 @@ class InvoiceServiceDateComputationTest {
         assertEquals(customDue, generated.getDueDate());
     }
 
+    @Test
+    void generate_backfillsOwnerIdForExistingInvoiceWhenUnitIsLinkedLater() {
+        GenerateInvoiceRequest req = baseRequest();
+
+        Invoice existing = new Invoice();
+        existing.setId("INV-unit::101-202604");
+        existing.setTenantId("tenant::1");
+        existing.setUnitId("unit::101");
+        existing.setOwnerId(null);
+        when(invoiceRepository.findById("INV-unit::101-202604")).thenReturn(Optional.of(existing));
+
+        Unit linkedUnit = new Unit();
+        linkedUnit.setId("unit::101");
+        linkedUnit.setTenantId("tenant::1");
+        linkedUnit.setOwnerId("owner::42");
+        when(unitRepository.findById("unit::101")).thenReturn(Optional.of(linkedUnit));
+
+        Invoice generated = invoiceService.generate("tenant::1", req);
+
+        assertEquals("owner::42", generated.getOwnerId());
+        verify(invoiceRepository, times(1)).save(existing);
+    }
+
+    @Test
+    void backfillOwnerForUnitInvoices_updatesOnlyInvoicesMissingOwner() {
+        Invoice missingOwner = new Invoice();
+        missingOwner.setId("INV-unit::101-202604");
+        missingOwner.setTenantId("tenant::1");
+        missingOwner.setUnitId("unit::101");
+
+        Invoice alreadyOwned = new Invoice();
+        alreadyOwned.setId("INV-unit::101-202603");
+        alreadyOwned.setTenantId("tenant::1");
+        alreadyOwned.setUnitId("unit::101");
+        alreadyOwned.setOwnerId("owner::existing");
+
+        when(invoiceRepository.findByTenantIdAndUnitId("tenant::1", "unit::101"))
+                .thenReturn(List.of(missingOwner, alreadyOwned));
+
+        invoiceService.backfillOwnerForUnitInvoices("tenant::1", "unit::101", "owner::42");
+
+        assertEquals("owner::42", missingOwner.getOwnerId());
+        assertEquals("owner::existing", alreadyOwned.getOwnerId());
+        verify(invoiceRepository, times(1)).save(missingOwner);
+    }
+
     private GenerateInvoiceRequest baseRequest() {
         GenerateInvoiceRequest req = new GenerateInvoiceRequest();
         req.setUnitId("unit::101");
@@ -124,15 +173,15 @@ class InvoiceServiceDateComputationTest {
         profile.setTenantId("tenant::1");
         profile.setCode("2BHK");
         profile.setMonthlyAmount(BigDecimal.valueOf(12000));
-        when(profileRepository.findByTenantIdAndCode("tenant::1", "2BHK")).thenReturn(Optional.of(profile));
+        lenient().when(profileRepository.findByTenantIdAndCode("tenant::1", "2BHK")).thenReturn(Optional.of(profile));
 
         Tenant tenant = new Tenant();
         tenant.setId("tenant::1");
-        tenant.setBillingDay(5);
+        tenant.setInvoiceDate(LocalDate.of(2026, 4, 5));
         lenient().when(tenantRepository.findById("tenant::1")).thenReturn(Optional.of(tenant));
 
         when(invoiceRepository.findById("INV-unit::101-202604")).thenReturn(Optional.empty());
-        when(invoiceRepository.findById("INV-unit::101-202603")).thenReturn(Optional.empty());
+        lenient().when(invoiceRepository.findById("INV-unit::101-202603")).thenReturn(Optional.empty());
 
         return req;
     }

@@ -25,6 +25,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.List;
 
@@ -211,7 +212,7 @@ class TenantIsolationServiceTest {
         CreateTenantRequest req = new CreateTenantRequest();
         req.setName("Sunrise Residency");
         req.setCurrency("INR");
-        req.setBillingDay(5);
+        req.setInvoiceDate(LocalDate.of(2026, 4, 20));
         req.setLateFeeType("PERCENTAGE");
         req.setLateFeeValue(2.5);
 

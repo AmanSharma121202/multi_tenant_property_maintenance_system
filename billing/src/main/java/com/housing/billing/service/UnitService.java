@@ -26,6 +26,7 @@ public class UnitService {
 
     private final UnitRepository unitRepository;
     private final OwnerRepository ownerRepository;
+    private final InvoiceService invoiceService;
     private final DynamicFilterEngine dynamicFilterEngine;
     private final ModelValidationService modelValidationService;
 
@@ -122,6 +123,7 @@ public class UnitService {
 
         // 1) If the unit is already linked to THIS owner → idempotent no-op
         if (req.getOwnerId() != null && req.getOwnerId().equals(unit.getOwnerId())) {
+            invoiceService.backfillOwnerForUnitInvoices(tenantId, unitId, req.getOwnerId());
             return unit;
         }
 
@@ -153,6 +155,8 @@ public class UnitService {
         }
         owner.setUpdatedAt(Instant.now());
         ownerRepository.save(owner);
+
+        invoiceService.backfillOwnerForUnitInvoices(tenantId, unitId, req.getOwnerId());
 
         return unit;
     }

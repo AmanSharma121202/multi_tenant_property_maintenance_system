@@ -24,6 +24,7 @@ public class OwnerService {
 
     private final OwnerRepository ownerRepository;
     private final UnitRepository  unitRepository;
+    private final InvoiceService invoiceService;
     private final DynamicFilterEngine dynamicFilterEngine;
     private final ModelValidationService modelValidationService;
 
@@ -114,6 +115,7 @@ public class OwnerService {
                 owner.setUpdatedAt(Instant.now());
                 ownerRepository.save(owner);
             }
+            invoiceService.backfillOwnerForUnitInvoices(tenantId, unitId, ownerId);
             return owner; // unit already correctly linked
         }
 
@@ -140,6 +142,8 @@ public class OwnerService {
         unit.setUpdatedAt(Instant.now());
         modelValidationService.validate(unit);
         unitRepository.save(unit);
+
+        invoiceService.backfillOwnerForUnitInvoices(tenantId, unitId, ownerId);
 
         return owner;
     }

@@ -3,6 +3,7 @@ package com.housing.billing.service;
 import com.housing.billing.model.Tenant;
 import com.housing.billing.repository.TenantRepository;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneOffset;
 import org.springframework.beans.factory.annotation.Value;
 
@@ -66,7 +67,7 @@ public class InvoiceService {
             if (!tenantId.equals(existing.get().getTenantId())) {
                 throw new TenantIsolationException("Tenant isolation violation");
             }
-            return existing.get();
+            return backfillExistingInvoiceOwnerIfMissing(existing.get(), tenantId, req.getUnitId());
         }
 
         // 3. Get the previous month's closing balance = this month's opening balance
@@ -120,11 +121,11 @@ public class InvoiceService {
             Tenant tenant = tenantRepository.findById(tenantId)
                     .orElseThrow(() -> new ResourceNotFoundException("Tenant not found"));
 
-            int billingDay = tenant.getBillingDay(); // expected 1-28
-            if (billingDay < 1) billingDay = 1;
-            if (billingDay > 28) billingDay = 28;
+            int preferredDay = tenant.getInvoiceDate() == null ? 1 : tenant.getInvoiceDate().getDayOfMonth();
+            int maxDay = YearMonth.of(req.getYear(), req.getMonth()).lengthOfMonth();
+            int issueDay = Math.min(preferredDay, maxDay);
 
-            LocalDate localIssue = LocalDate.of(req.getYear(), req.getMonth(), billingDay);
+            LocalDate localIssue = LocalDate.of(req.getYear(), req.getMonth(), issueDay);
             resolvedIssueDate = localIssue.atStartOfDay().toInstant(ZoneOffset.UTC);
         }
 
@@ -140,6 +141,24 @@ public class InvoiceService {
         modelValidationService.validate(invoice);
 
         return invoiceRepository.save(invoice);
+    }
+
+    public void backfillOwnerForUnitInvoices(String tenantId, String unitId, String ownerId) {
+        if (ownerId == null || ownerId.isBlank()) {
+            return;
+        }
+
+        List<Invoice> invoices = invoiceRepository.findByTenantIdAndUnitId(tenantId, unitId);
+        for (Invoice invoice : invoices) {
+            if (invoice.getOwnerId() != null && !invoice.getOwnerId().isBlank()) {
+                continue;
+            }
+
+            invoice.setOwnerId(ownerId);
+            invoice.setUpdatedAt(Instant.now());
+            modelValidationService.validate(invoice);
+            invoiceRepository.save(invoice);
+        }
     }
 
     public List<Invoice> list(String tenantId, String filter) {
@@ -190,6 +209,27 @@ public class InvoiceService {
         }
 
         invoice.setUpdatedAt(Instant.now());
+        return invoiceRepository.save(invoice);
+    }
+
+    private Invoice backfillExistingInvoiceOwnerIfMissing(Invoice invoice, String tenantId, String unitId) {
+        if (invoice.getOwnerId() != null && !invoice.getOwnerId().isBlank()) {
+            return invoice;
+        }
+
+        Unit unit = unitRepository.findById(unitId)
+                .orElseThrow(() -> new ResourceNotFoundException("Unit not found"));
+        if (!tenantId.equals(unit.getTenantId())) {
+            throw new TenantIsolationException("Tenant isolation violation");
+        }
+
+        if (unit.getOwnerId() == null || unit.getOwnerId().isBlank()) {
+            return invoice;
+        }
+
+        invoice.setOwnerId(unit.getOwnerId());
+        invoice.setUpdatedAt(Instant.now());
+        modelValidationService.validate(invoice);
         return invoiceRepository.save(invoice);
     }
 }

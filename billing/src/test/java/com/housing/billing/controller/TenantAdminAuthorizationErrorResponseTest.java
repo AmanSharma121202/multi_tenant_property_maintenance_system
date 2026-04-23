@@ -36,7 +36,7 @@ class TenantAdminAuthorizationErrorResponseTest {
                 {
                   "name": "Sunrise Residency",
                   "currency": "USD",
-                  "billingDay": 5,
+                  "invoice_date": "2026-04-20",
                   "lateFeeType": "PERCENTAGE",
                   "lateFeeValue": 2.5,
                   "address": "Main Street"

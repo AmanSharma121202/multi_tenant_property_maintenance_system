@@ -1,8 +1,8 @@
 package com.housing.billing.model;
 
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Data;
@@ -11,6 +11,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.couchbase.core.mapping.Document;
 import org.springframework.data.couchbase.repository.Collection;
 import org.springframework.data.couchbase.repository.Scope;
+
+import java.time.LocalDate;
 
 @Document
 @Collection("tenants")
@@ -26,9 +28,9 @@ public class Tenant extends BaseDocument {
     @NotBlank(message = "Currency is required")
     @Pattern(regexp = "^[A-Z]{3}$", message = "Currency must be a 3-letter ISO code (e.g. INR)")
     private String currency;      // e.g. INR
-    @Min(value = 1, message = "Billing day must be between 1 and 28")
-    @Max(value = 28, message = "Billing day must be between 1 and 28")
-    private int    billingDay;    // Day of month when invoices are generated
+    @NotNull(message = "Invoice date is required")
+    @JsonProperty("invoice_date")
+    private LocalDate invoiceDate; // Official tenant billing date for invoice generation
     @NotBlank(message = "Late fee type is required")
     @Pattern(regexp = "^(PERCENTAGE|FIXED|NONE)$",
             message = "Late fee type must be one of: PERCENTAGE, FIXED, NONE")

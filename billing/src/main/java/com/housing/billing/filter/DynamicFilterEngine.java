@@ -11,8 +11,10 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -118,7 +120,12 @@ public class DynamicFilterEngine {
             }
         }
 
-        FilterExpressionParser.ConditionNode eqCondition = findFirstConfiguredEqCondition(node, valueNotFoundMessages);
+        List<FilterExpressionParser.ConditionNode> eqConditions = collectConfiguredEqConditions(node, valueNotFoundMessages);
+        if (eqConditions.size() > 1) {
+            throw new FilterValueNotFoundException(buildCombinedEqNoMatchMessage(eqConditions));
+        }
+
+        FilterExpressionParser.ConditionNode eqCondition = eqConditions.isEmpty() ? null : eqConditions.getFirst();
         if (eqCondition != null) {
             String template = valueNotFoundMessages.get(eqCondition.field());
             String value = literalToMessageValue(eqCondition.literal());
@@ -127,21 +134,41 @@ public class DynamicFilterEngine {
         }
     }
 
-    private FilterExpressionParser.ConditionNode findFirstConfiguredEqCondition(FilterExpressionParser.Node node,
-                                                                                Map<String, String> valueNotFoundMessages) {
+    private List<FilterExpressionParser.ConditionNode> collectConfiguredEqConditions(FilterExpressionParser.Node node,
+                                                                                     Map<String, String> valueNotFoundMessages) {
+        List<FilterExpressionParser.ConditionNode> collected = new ArrayList<>();
+        collectConfiguredEqConditions(node, valueNotFoundMessages, collected, new LinkedHashSet<>());
+        return collected;
+    }
+
+    private void collectConfiguredEqConditions(FilterExpressionParser.Node node,
+                                               Map<String, String> valueNotFoundMessages,
+                                               List<FilterExpressionParser.ConditionNode> collected,
+                                               Set<String> seen) {
         if (node instanceof FilterExpressionParser.LogicalNode logicalNode) {
-            FilterExpressionParser.ConditionNode left = findFirstConfiguredEqCondition(logicalNode.left(), valueNotFoundMessages);
-            if (left != null) {
-                return left;
-            }
-            return findFirstConfiguredEqCondition(logicalNode.right(), valueNotFoundMessages);
+            collectConfiguredEqConditions(logicalNode.left(), valueNotFoundMessages, collected, seen);
+            collectConfiguredEqConditions(logicalNode.right(), valueNotFoundMessages, collected, seen);
+            return;
         }
 
         FilterExpressionParser.ConditionNode condition = (FilterExpressionParser.ConditionNode) node;
-        if (condition.operator() == ComparisonOperator.EQ && valueNotFoundMessages.containsKey(condition.field())) {
-            return condition;
+        if (condition.operator() != ComparisonOperator.EQ || !valueNotFoundMessages.containsKey(condition.field())) {
+            return;
         }
-        return null;
+
+        String key = condition.field() + "|" + literalToMessageValue(condition.literal());
+        if (!seen.add(key)) {
+            return;
+        }
+        collected.add(condition);
+    }
+
+    private String buildCombinedEqNoMatchMessage(List<FilterExpressionParser.ConditionNode> conditions) {
+        String details = conditions.stream()
+                .map(c -> c.field() + "='" + literalToMessageValue(c.literal()) + "'")
+                .reduce((left, right) -> left + " and " + right)
+                .orElse("provided filters");
+        return "No records match all filters: " + details;
     }
 
     private FilterExpressionParser.ConditionNode findFirstComparatorCondition(FilterExpressionParser.Node node) {

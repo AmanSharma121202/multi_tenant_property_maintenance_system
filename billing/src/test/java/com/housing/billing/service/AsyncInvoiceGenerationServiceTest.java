@@ -1,26 +1,22 @@
 package com.housing.billing.service;
 
 import com.housing.billing.dto.request.GenerateInvoiceRequest;
-import com.housing.billing.dto.response.InvoiceGenerationJobResponse;
-import com.housing.billing.model.Invoice;
-import com.housing.billing.model.InvoiceGenerationJob;
-import com.housing.billing.repository.InvoiceGenerationJobRepository;
+import com.housing.billing.model.Unit;
+import com.housing.billing.repository.UnitRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.Instant;
-import java.util.HashMap;
+import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -28,122 +24,60 @@ import static org.mockito.Mockito.when;
 class AsyncInvoiceGenerationServiceTest {
 
     @Mock
-    private InvoiceGenerationJobRepository jobRepository;
-    @Mock
     private InvoiceService invoiceService;
     @Mock
-    private ModelValidationService modelValidationService;
+    private UnitRepository unitRepository;
 
     @Test
-    void enqueue_existingNaturalKeyJob_returnsExistingWithoutReprocessing() {
-        GenerateInvoiceRequest req = baseRequest();
-        String jobId = "inv-job::tenant::1::unit::101::202604";
-
-        InvoiceGenerationJob existing = new InvoiceGenerationJob();
-        existing.setId(jobId);
-        existing.setTenantId("tenant::1");
-        existing.setStatus("SUCCEEDED");
-        existing.setInvoiceId("INV-unit::101-202604");
-        existing.setCreatedAt(Instant.now());
-        existing.setUpdatedAt(Instant.now());
-
-        when(jobRepository.findById(jobId)).thenReturn(Optional.of(existing));
+    void scheduleTenantInvoiceGeneration_generatesInvoicesForAllTenantUnits() {
+        Unit u1 = unit("unit::101");
+        Unit u2 = unit("unit::102");
+        when(unitRepository.findByTenantId("tenant::1")).thenReturn(List.of(u1, u2));
 
         AsyncInvoiceGenerationService service = new AsyncInvoiceGenerationService(
-                jobRepository,
+                unitRepository,
                 invoiceService,
-                modelValidationService,
                 Runnable::run
         );
 
-        InvoiceGenerationJobResponse response = service.enqueue("tenant::1", req);
+        LocalDate invoiceDate = LocalDate.of(2026, 4, 20);
+        service.scheduleTenantInvoiceGeneration("tenant::1", invoiceDate, Duration.ZERO);
 
-        assertEquals(jobId, response.getJobId());
-        assertEquals("SUCCEEDED", response.getStatus());
-        assertEquals("INV-unit::101-202604", response.getInvoiceId());
-        verify(invoiceService, never()).generate(any(), any());
+        verify(invoiceService, org.mockito.Mockito.timeout(1000).times(2))
+                .generate(eq("tenant::1"), any(GenerateInvoiceRequest.class));
     }
 
     @Test
-    void enqueue_newJob_persistsAsSubmittedWithoutImmediateProcessing() {
-        GenerateInvoiceRequest req = baseRequest();
-        String jobId = "inv-job::tenant::1::unit::101::202604";
+    void scheduleTenantInvoiceGeneration_continuesWhenOneUnitFails() {
+        Unit u1 = unit("unit::101");
+        Unit u2 = unit("unit::102");
+        when(unitRepository.findByTenantId("tenant::1")).thenReturn(List.of(u1, u2));
 
-        Map<String, InvoiceGenerationJob> jobStore = new HashMap<>();
-        when(jobRepository.findById(any())).thenAnswer(invocation -> {
-            String id = invocation.getArgument(0, String.class);
-            return Optional.ofNullable(jobStore.get(id));
-        });
-        when(jobRepository.save(any(InvoiceGenerationJob.class))).thenAnswer(invocation -> {
-            InvoiceGenerationJob job = invocation.getArgument(0, InvoiceGenerationJob.class);
-            jobStore.put(job.getId(), job);
-            return job;
-        });
+        AtomicInteger calls = new AtomicInteger(0);
+        doAnswer(invocation -> {
+            if (calls.getAndIncrement() == 0) {
+                throw new RuntimeException("first unit failed");
+            }
+            return null;
+        }).when(invoiceService).generate(eq("tenant::1"), any(GenerateInvoiceRequest.class));
 
         AsyncInvoiceGenerationService service = new AsyncInvoiceGenerationService(
-                jobRepository,
+                unitRepository,
                 invoiceService,
-                modelValidationService,
                 Runnable::run
         );
 
-        InvoiceGenerationJobResponse response = service.enqueue("tenant::1", req);
+        service.scheduleTenantInvoiceGeneration("tenant::1", LocalDate.of(2026, 4, 20), Duration.ZERO);
 
-        assertEquals(jobId, response.getJobId());
-        assertEquals("SUBMITTED", response.getStatus());
-
-        InvoiceGenerationJob persisted = jobStore.get(jobId);
-        assertNotNull(persisted);
-        assertEquals("SUBMITTED", persisted.getStatus());
-
-        verify(invoiceService, never()).generate(eq("tenant::1"), any(GenerateInvoiceRequest.class));
-        verify(modelValidationService).validate(any(InvoiceGenerationJob.class));
+        verify(invoiceService, org.mockito.Mockito.timeout(1000).times(2))
+                .generate(eq("tenant::1"), any(GenerateInvoiceRequest.class));
+        assertEquals(2, calls.get());
     }
 
-    @Test
-    void dispatchSubmittedJobs_processesQueuedJobs() {
-        GenerateInvoiceRequest req = baseRequest();
-        String jobId = "inv-job::tenant::1::unit::101::202604";
-
-        Map<String, InvoiceGenerationJob> jobStore = new HashMap<>();
-        when(jobRepository.findById(any())).thenAnswer(invocation -> {
-            String id = invocation.getArgument(0, String.class);
-            return Optional.ofNullable(jobStore.get(id));
-        });
-        when(jobRepository.findAll()).thenAnswer(invocation -> List.copyOf(jobStore.values()));
-        when(jobRepository.save(any(InvoiceGenerationJob.class))).thenAnswer(invocation -> {
-            InvoiceGenerationJob job = invocation.getArgument(0, InvoiceGenerationJob.class);
-            jobStore.put(job.getId(), job);
-            return job;
-        });
-
-        Invoice invoice = new Invoice();
-        invoice.setId("INV-unit::101-202604");
-        when(invoiceService.generate(eq("tenant::1"), any(GenerateInvoiceRequest.class))).thenReturn(invoice);
-
-        AsyncInvoiceGenerationService service = new AsyncInvoiceGenerationService(
-                jobRepository,
-                invoiceService,
-                modelValidationService,
-                Runnable::run
-        );
-
-        service.enqueue("tenant::1", req);
-        service.dispatchSubmittedJobs(10);
-
-        InvoiceGenerationJob persisted = jobStore.get(jobId);
-        assertNotNull(persisted);
-        assertEquals("SUCCEEDED", persisted.getStatus());
-        assertEquals("INV-unit::101-202604", persisted.getInvoiceId());
-        verify(invoiceService).generate(eq("tenant::1"), any(GenerateInvoiceRequest.class));
-    }
-
-    private GenerateInvoiceRequest baseRequest() {
-        GenerateInvoiceRequest req = new GenerateInvoiceRequest();
-        req.setUnitId("unit::101");
-        req.setYear(2026);
-        req.setMonth(4);
-        return req;
+    private Unit unit(String id) {
+        Unit unit = new Unit();
+        unit.setId(id);
+        return unit;
     }
 }
 

@@ -166,7 +166,7 @@ class DynamicFilterEngineTest {
                 )
         );
 
-        assertEquals("Unit not found for unitNumber 'A-101'", ex.getMessage());
+        assertEquals("No records match all filters: unitNumber='A-101' and status='OVERDUE'", ex.getMessage());
     }
 
     @Test

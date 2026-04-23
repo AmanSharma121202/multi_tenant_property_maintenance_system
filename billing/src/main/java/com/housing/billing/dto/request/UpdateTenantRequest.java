@@ -1,13 +1,14 @@
 package com.housing.billing.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.housing.billing.validation.AllowedConfigValue;
 import com.housing.billing.validation.AllowedValueType;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Data;
+
+import java.time.LocalDate;
 
 @Data
 public class UpdateTenantRequest {
@@ -20,10 +21,9 @@ public class UpdateTenantRequest {
     @AllowedConfigValue(type = AllowedValueType.CURRENCY, message = "currency must be one of configured validCurrency values")
     private String currency;
 
-    @Schema(example = "5")
-    @Min(value = 1, message = "billingDay must be between 1 and 28")
-    @Max(value = 28, message = "billingDay must be between 1 and 28")
-    private Integer billingDay;
+    @Schema(example = "2026-04-20")
+    @JsonProperty("invoice_date")
+    private LocalDate invoiceDate;
 
     @Schema(example = "PERCENTAGE")
     @AllowedConfigValue(type = AllowedValueType.LATE_FEE_TYPE, message = "lateFeeType must be one of configured validLateFeeType values")

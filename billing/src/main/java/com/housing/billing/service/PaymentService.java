@@ -16,6 +16,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -116,12 +117,36 @@ public class PaymentService {
 
     public Payment update(String tenantId, String paymentId, UpdatePaymentRequest req) {
         Payment payment = get(tenantId, paymentId);
+        BigDecimal oldAmount = payment.getAmount();
+        boolean amountChanged = req.getAmount() != null && oldAmount != null
+                && req.getAmount().compareTo(oldAmount) != 0;
+
         if (req.getAmount() != null) payment.setAmount(req.getAmount());
         if (req.getMethod() != null) payment.setMethod(req.getMethod());
         if (req.getNotes()  != null) payment.setNotes(req.getNotes());
         if (req.getTxnRef() != null) payment.setTxnRef(req.getTxnRef());
         payment.setUpdatedAt(Instant.now());
         modelValidationService.validate(payment);
-        return paymentRepository.save(payment);
+        Payment saved = paymentRepository.save(payment);
+
+        if (amountChanged) {
+            syncInvoicePaymentsFromPayments(tenantId, payment.getInvoiceId());
+        }
+
+        return saved;
+    }
+
+    private void syncInvoicePaymentsFromPayments(String tenantId, String invoiceId) {
+        Invoice invoice = invoiceService.get(tenantId, invoiceId);
+        BigDecimal totalPaid = paymentRepository.findByTenantIdAndInvoiceId(tenantId, invoiceId).stream()
+                .map(Payment::getAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        invoice.setPaymentsInPeriod(totalPaid);
+        invoice.setUpdatedAt(Instant.now());
+        modelValidationService.validate(invoice);
+        invoiceRepository.save(invoice);
+        invoiceService.recalculate(tenantId, invoiceId);
     }
 }
