@@ -1,17 +1,22 @@
 package com.housing.billing.scheduler;
 
+import com.housing.billing.messaging.InvoiceFlowEventPublisher;
+import com.housing.billing.messaging.TenantInvoiceDueEvent;
 import com.housing.billing.model.Tenant;
+import com.housing.billing.repository.InvoiceRepository;
 import com.housing.billing.repository.TenantRepository;
-import com.housing.billing.service.AsyncInvoiceGenerationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
+import java.time.DateTimeException;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -19,29 +24,114 @@ import java.time.ZoneId;
 public class InvoiceGenerationScheduler {
 
     private final TenantRepository tenantRepository;
-    private final AsyncInvoiceGenerationService asyncInvoiceGenerationService;
+    private final InvoiceRepository invoiceRepository;
+    private final InvoiceFlowEventPublisher invoiceFlowEventPublisher;
 
     @Value("${app.async.invoice-generation.tenant-timezone:UTC}")
     private String tenantTimezone;
 
+    @Value("${app.kafka.enabled:false}")
+    private boolean kafkaEnabled;
+
     @Scheduled(cron = "${app.async.invoice-generation.tenant-scan-cron:0 */1 * * * *}")
     public void scheduleTenantInvoices() {
-        ZoneId zoneId = ZoneId.of(tenantTimezone);
-        LocalDate today = LocalDate.now(zoneId);
-
-        for (Tenant tenant : tenantRepository.findAllTenants()) {
-            LocalDate invoiceDate = tenant.getInvoiceDate();
-            if (invoiceDate == null || !invoiceDate.isEqual(today)) {
-                continue;
-            }
-
-            asyncInvoiceGenerationService.scheduleTenantInvoiceGeneration(
-                    tenant.getId(),
-                    invoiceDate,
-                    Duration.ofMinutes(1)
-            );
-            log.info("Scheduled tenant invoice generation for tenant={} after 1 minute", tenant.getId());
+        long tickStartedAtMs = System.currentTimeMillis();
+        if (!kafkaEnabled) {
+            log.warn("Skipping tenant invoice scheduling because Kafka event mode is disabled");
+            return;
         }
+
+        ZoneId zoneId;
+        try {
+            zoneId = ZoneId.of(tenantTimezone);
+        } catch (DateTimeException ex) {
+            log.error("Skipping tenant invoice scheduling due to invalid tenant timezone='{}': {}",
+                    tenantTimezone, rootMessage(ex));
+            return;
+        }
+
+        LocalDate today = LocalDate.now(zoneId);
+        log.info("Tenant invoice scheduling tick started: date={} timezone={} kafkaEnabled={}",
+                today, tenantTimezone, kafkaEnabled);
+
+        List<Tenant> tenants;
+        try {
+            tenants = tenantRepository.findAllTenants();
+        } catch (Exception ex) {
+            log.error("Skipping tenant invoice scheduling for date={} because tenant query failed: {}",
+                    today, rootMessage(ex));
+            return;
+        }
+
+        int publishedCount = 0;
+        int skippedNoAnchorCount = 0;
+        int skippedNotDueCount = 0;
+        int skippedAlreadyGeneratedCount = 0;
+        int tenantFailureCount = 0;
+        for (Tenant tenant : tenants) {
+            try {
+                LocalDate tenantBillingAnchor = tenant.getInvoiceDate();
+                if (tenantBillingAnchor == null) {
+                    skippedNoAnchorCount++;
+                    log.debug("Skipping tenant in scheduler: tenant={} reason=no-invoice-anchor", tenant.getId());
+                    continue;
+                }
+
+                // invoiceDate on tenant acts as billing-day anchor (not a one-time exact date).
+                int preferredDay = tenantBillingAnchor.getDayOfMonth();
+                int dueDayThisMonth = Math.min(preferredDay, today.lengthOfMonth());
+                if (today.getDayOfMonth() < dueDayThisMonth) {
+                    skippedNotDueCount++;
+                    log.debug("Skipping tenant in scheduler: tenant={} reason=not-due-today dueDay={} todayDay={}",
+                            tenant.getId(), dueDayThisMonth, today.getDayOfMonth());
+                    continue;
+                }
+
+                boolean alreadyGenerated = !invoiceRepository
+                        .findAnyByTenantIdAndYearAndMonth(tenant.getId(), today.getYear(), today.getMonthValue())
+                        .isEmpty();
+                if (alreadyGenerated) {
+                    skippedAlreadyGeneratedCount++;
+                    log.debug("Skipping tenant in scheduler: tenant={} reason=already-generated cycle={}-{}",
+                            tenant.getId(), today.getYear(), today.getMonthValue());
+                    continue;
+                }
+
+                // Generate invoice for the current billing cycle.
+                LocalDate billingDate = today;
+
+                TenantInvoiceDueEvent event = TenantInvoiceDueEvent.builder()
+                        .eventId(UUID.randomUUID().toString())
+                        .tenantId(tenant.getId())
+                        .billingDate(billingDate)
+                        .delaySeconds(0)
+                        .occurredAt(Instant.now())
+                        .build();
+                invoiceFlowEventPublisher.publishTenantInvoiceDue(event);
+                publishedCount++;
+                log.info("Scheduler queued tenant invoice due event: eventId={} tenant={} cycle={}-{}",
+                        event.getEventId(), tenant.getId(), today.getYear(), today.getMonthValue());
+            } catch (Exception ex) {
+                tenantFailureCount++;
+                log.error("Tenant invoice scheduling failed for tenant={} on cycle={}-{}: {}",
+                        tenant == null ? "unknown" : tenant.getId(),
+                        today.getYear(), today.getMonthValue(), rootMessage(ex));
+            }
+        }
+
+        long tickDurationMs = System.currentTimeMillis() - tickStartedAtMs;
+        log.info("Tenant invoice scheduling tick completed: date={} tenantsScanned={} eventsPublished={} skippedNoAnchor={} skippedNotDue={} skippedAlreadyGenerated={} tenantFailures={} durationMs={}",
+                today, tenants.size(), publishedCount, skippedNoAnchorCount, skippedNotDueCount,
+                skippedAlreadyGeneratedCount, tenantFailureCount, tickDurationMs);
+    }
+
+    private String rootMessage(Throwable throwable) {
+        Throwable cause = throwable;
+        while (cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        String msg = cause.getMessage();
+        return (msg == null || msg.isBlank()) ? "Unknown scheduling failure" : msg;
     }
 }
 

@@ -6,11 +6,14 @@ import com.housing.billing.dto.request.LinkOwnerRequest;
 import com.housing.billing.dto.request.UpdateUnitRequest;
 import com.housing.billing.exception.ResourceNotFoundException;
 import com.housing.billing.exception.TenantIsolationException;
+import com.housing.billing.messaging.InvoiceFlowEventPublisher;
+import com.housing.billing.messaging.OwnerUnitLinkedEvent;
 import com.housing.billing.model.Owner;
 import com.housing.billing.model.Unit;
 import com.housing.billing.repository.OwnerRepository;
 import com.housing.billing.repository.UnitRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -27,8 +30,12 @@ public class UnitService {
     private final UnitRepository unitRepository;
     private final OwnerRepository ownerRepository;
     private final InvoiceService invoiceService;
+    private final InvoiceFlowEventPublisher invoiceFlowEventPublisher;
     private final DynamicFilterEngine dynamicFilterEngine;
     private final ModelValidationService modelValidationService;
+
+    @Value("${app.kafka.enabled:false}")
+    private boolean kafkaEnabled;
 
     private static final Set<String> FILTERABLE_FIELDS = Set.of(
             "unitNumber", "profileCode", "active"
@@ -123,7 +130,7 @@ public class UnitService {
 
         // 1) If the unit is already linked to THIS owner → idempotent no-op
         if (req.getOwnerId() != null && req.getOwnerId().equals(unit.getOwnerId())) {
-            invoiceService.backfillOwnerForUnitInvoices(tenantId, unitId, req.getOwnerId());
+            triggerOwnerBackfill(tenantId, unitId, req.getOwnerId());
             return unit;
         }
 
@@ -156,9 +163,24 @@ public class UnitService {
         owner.setUpdatedAt(Instant.now());
         ownerRepository.save(owner);
 
-        invoiceService.backfillOwnerForUnitInvoices(tenantId, unitId, req.getOwnerId());
+        triggerOwnerBackfill(tenantId, unitId, req.getOwnerId());
 
         return unit;
+    }
+
+    private void triggerOwnerBackfill(String tenantId, String unitId, String ownerId) {
+        if (kafkaEnabled) {
+            OwnerUnitLinkedEvent event = OwnerUnitLinkedEvent.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .tenantId(tenantId)
+                    .unitId(unitId)
+                    .ownerId(ownerId)
+                    .occurredAt(Instant.now())
+                    .build();
+            invoiceFlowEventPublisher.publishOwnerUnitLinked(event);
+            return;
+        }
+        invoiceService.backfillOwnerForUnitInvoices(tenantId, unitId, ownerId);
     }
 
 

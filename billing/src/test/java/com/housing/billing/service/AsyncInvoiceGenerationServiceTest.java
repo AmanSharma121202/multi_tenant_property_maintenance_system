@@ -17,6 +17,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -72,6 +74,21 @@ class AsyncInvoiceGenerationServiceTest {
         verify(invoiceService, org.mockito.Mockito.timeout(1000).times(2))
                 .generate(eq("tenant::1"), any(GenerateInvoiceRequest.class));
         assertEquals(2, calls.get());
+    }
+
+    @Test
+    void scheduleTenantInvoiceGeneration_whenUnitLookupFails_skipsInvoiceGeneration() {
+        lenient().when(unitRepository.findByTenantId("tenant::1")).thenThrow(new RuntimeException("db timeout"));
+
+        AsyncInvoiceGenerationService service = new AsyncInvoiceGenerationService(
+                unitRepository,
+                invoiceService,
+                Runnable::run
+        );
+
+        service.scheduleTenantInvoiceGeneration("tenant::1", LocalDate.of(2026, 4, 20), Duration.ZERO);
+
+        verify(invoiceService, never()).generate(eq("tenant::1"), any(GenerateInvoiceRequest.class));
     }
 
     private Unit unit(String id) {

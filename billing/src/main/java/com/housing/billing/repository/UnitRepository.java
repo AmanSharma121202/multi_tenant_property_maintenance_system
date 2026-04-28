@@ -35,8 +35,4 @@ public interface UnitRepository extends CouchbaseRepository<Unit, String> {
             " WHERE u.tenantId = $1 AND u.active = $2")
     List<Unit> findByTenantIdAndActive(String tenantId, boolean active);
 
-    @Query("SELECT META().id AS __id, META().cas AS __cas, u.*" +
-            " FROM `prop-tax`.`main`.`units` u" +
-            " WHERE u.tenantId = $1 AND u.ownerId = $2")
-    List<Unit> findByTenantIdAndOwnerId(String tenantId, String ownerId);
 }

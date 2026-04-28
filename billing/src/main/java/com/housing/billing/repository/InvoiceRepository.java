@@ -20,26 +20,12 @@ public interface InvoiceRepository extends CouchbaseRepository<Invoice, String> 
             " ORDER BY i.year DESC, i.month DESC")
     List<Invoice> findByTenantIdAndUnitId(String tenantId, String unitId);
 
-    @Query("SELECT META().id AS __id, META().cas AS __cas, i.*" +
-            " FROM `prop-tax`.`main`.`invoices` i" +
-            " WHERE i.tenantId = $1 AND i.ownerId = $2" +
-            " ORDER BY i.year DESC, i.month DESC")
-    List<Invoice> findByTenantIdAndOwnerId(String tenantId, String ownerId);
 
     @Query("SELECT META().id AS __id, META().cas AS __cas, i.*" +
             " FROM `prop-tax`.`main`.`invoices` i" +
-            " WHERE i.tenantId = $1 AND i.status = $2")
-    List<Invoice> findByTenantIdAndStatus(String tenantId, String status);
-
-    @Query("SELECT META().id AS __id, META().cas AS __cas, i.*" +
-            " FROM `prop-tax`.`main`.`invoices` i" +
-            " WHERE i.tenantId = $1 AND i.year = $2")
-    List<Invoice> findByTenantIdAndYear(String tenantId, int year);
-
-    @Query("SELECT META().id AS __id, META().cas AS __cas, i.*" +
-            " FROM `prop-tax`.`main`.`invoices` i" +
-            " WHERE i.tenantId = $1 AND i.year = $2 AND i.month = $3")
-    List<Invoice> findByTenantIdAndYearAndMonth(String tenantId, int year, int month);
+            " WHERE i.tenantId = $1 AND i.year = $2 AND i.month = $3" +
+            " LIMIT 1")
+    List<Invoice> findAnyByTenantIdAndYearAndMonth(String tenantId, int year, int month);
 
     @Query("SELECT META().id AS __id, META().cas AS __cas, i.*" +
             " FROM `prop-tax`.`main`.`invoices` i" +

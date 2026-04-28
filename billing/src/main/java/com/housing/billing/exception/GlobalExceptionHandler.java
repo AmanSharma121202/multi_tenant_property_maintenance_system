@@ -75,8 +75,25 @@ public class GlobalExceptionHandler {
                     .body(new ErrorResponse("VALIDATION_FAILED", msg));
         }
 
+        Throwable illegalArg = findCause(cause, IllegalArgumentException.class);
+        if (illegalArg instanceof IllegalArgumentException iae && iae.getMessage() != null && !iae.getMessage().isBlank()) {
+            return ResponseEntity.status(400)
+                    .body(new ErrorResponse("VALIDATION_FAILED", iae.getMessage()));
+        }
+
         return ResponseEntity.status(400)
                 .body(new ErrorResponse("VALIDATION_FAILED", "Malformed request body"));
+    }
+
+    private Throwable findCause(Throwable throwable, Class<? extends Throwable> targetType) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (targetType.isInstance(current)) {
+                return current;
+            }
+            current = current.getCause();
+        }
+        return null;
     }
 
     // 403 - User does not have permission

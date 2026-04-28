@@ -31,16 +31,52 @@ public class AsyncInvoiceGenerationService {
     }
 
     public void scheduleTenantInvoiceGeneration(String tenantId, LocalDate invoiceDate, Duration delay) {
+        scheduleTenantInvoiceGeneration(tenantId, invoiceDate, delay, null);
+    }
+
+    public void scheduleTenantInvoiceGeneration(String tenantId, LocalDate invoiceDate, Duration delay, String flowId) {
+        String safeFlowId = (flowId == null || flowId.isBlank()) ? "n/a" : flowId;
+        log.info("Scheduling tenant invoice generation task: flowId={} tenant={} billingDate={} delayMs={}",
+                safeFlowId, tenantId, invoiceDate, delay.toMillis());
+
         CompletableFuture.runAsync(
-                () -> generateForTenantUnits(tenantId, invoiceDate),
+                () -> generateForTenantUnits(tenantId, invoiceDate, safeFlowId),
                 CompletableFuture.delayedExecutor(delay.toMillis(), TimeUnit.MILLISECONDS, invoiceGenerationExecutor)
-        );
+        ).exceptionally(ex -> {
+            log.error("Tenant invoice generation task crashed: flowId={} tenant={} billingDate={} reason={}",
+                    safeFlowId, tenantId, invoiceDate, rootMessage(ex));
+            return null;
+        });
     }
 
     private void generateForTenantUnits(String tenantId, LocalDate invoiceDate) {
-        List<String> unitIds = unitRepository.findByTenantId(tenantId).stream()
-                .map(unit -> unit.getId())
-                .toList();
+        generateForTenantUnits(tenantId, invoiceDate, "n/a");
+    }
+
+    private void generateForTenantUnits(String tenantId, LocalDate invoiceDate, String flowId) {
+        long startedAtMs = System.currentTimeMillis();
+        List<String> unitIds;
+        try {
+            unitIds = unitRepository.findByTenantId(tenantId).stream()
+                    .map(unit -> unit.getId())
+                    .toList();
+        } catch (Exception ex) {
+            log.error("Tenant invoice generation failed before unit traversal: flowId={} tenant={} billingDate={} reason={}",
+                    flowId, tenantId, invoiceDate, rootMessage(ex));
+            return;
+        }
+
+        if (unitIds.isEmpty()) {
+            log.warn("Tenant invoice generation skipped: flowId={} tenant={} billingDate={} reason=no-units",
+                    flowId, tenantId, invoiceDate);
+            return;
+        }
+
+        log.info("Starting tenant invoice generation: flowId={} tenant={} billingDate={} unitCount={}",
+                flowId, tenantId, invoiceDate, unitIds.size());
+
+        int successCount = 0;
+        int failureCount = 0;
 
         for (String unitId : unitIds) {
             try {
@@ -50,10 +86,19 @@ public class AsyncInvoiceGenerationService {
                 req.setMonth(invoiceDate.getMonthValue());
                 req.setIssueDate(invoiceDate.atStartOfDay().toInstant(ZoneOffset.UTC));
                 invoiceService.generate(tenantId, req);
+                successCount++;
+                log.info("Tenant invoice generation succeeded: flowId={} tenant={} unit={} cycle={}-{}",
+                        flowId, tenantId, unitId, invoiceDate.getYear(), invoiceDate.getMonthValue());
             } catch (Exception ex) {
-                log.warn("Tenant invoice generation failed for tenant={} unit={}: {}", tenantId, unitId, rootMessage(ex));
+                failureCount++;
+                log.warn("Tenant invoice generation failed: flowId={} tenant={} unit={} cycle={}-{} reason={}",
+                        flowId, tenantId, unitId, invoiceDate.getYear(), invoiceDate.getMonthValue(), rootMessage(ex));
             }
         }
+
+        long durationMs = System.currentTimeMillis() - startedAtMs;
+        log.info("Tenant invoice generation completed: flowId={} tenant={} billingDate={} unitCount={} successCount={} failureCount={} durationMs={}",
+                flowId, tenantId, invoiceDate, unitIds.size(), successCount, failureCount, durationMs);
     }
 
     private String rootMessage(Throwable throwable) {

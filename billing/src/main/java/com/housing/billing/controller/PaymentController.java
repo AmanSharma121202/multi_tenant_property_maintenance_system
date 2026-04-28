@@ -1,7 +1,7 @@
 package com.housing.billing.controller;
 
 import com.housing.billing.dto.request.RecordPaymentRequest;
-import com.housing.billing.dto.request.UpdatePaymentRequest;
+import com.housing.billing.dto.request.UpdatePaymentMetadataRequest;
 import com.housing.billing.model.Payment;
 import com.housing.billing.service.PaymentService;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -47,7 +47,7 @@ public class PaymentController {
     @PatchMapping("/{paymentId}")
     public ResponseEntity<Payment> update(@PathVariable String tenantId,
                                           @PathVariable String paymentId,
-                                          @Valid @RequestBody UpdatePaymentRequest req) {
+                                          @Valid @RequestBody UpdatePaymentMetadataRequest req) {
         return ResponseEntity.ok(paymentService.update(tenantId, paymentId, req));
     }
 }
