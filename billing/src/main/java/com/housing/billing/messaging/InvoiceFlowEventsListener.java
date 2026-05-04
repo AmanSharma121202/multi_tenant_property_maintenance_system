@@ -31,11 +31,15 @@ public class InvoiceFlowEventsListener {
             groupId = "${spring.kafka.consumer.group-id}"
     )
     public void onTenantInvoiceDue(ConsumerRecord<String, Object> record) {
+        Object payload = record.value();
+        log.info("Received tenant invoice due event: topic={} partition={} offset={} key={} payloadType={}",
+                record.topic(), record.partition(), record.offset(), record.key(),
+                payload == null ? "null" : payload.getClass().getName());
+
         TenantInvoiceDueEvent event;
         try {
-            event = toEvent(record.value(), TenantInvoiceDueEvent.class);
+            event = toEvent(payload, TenantInvoiceDueEvent.class);
         } catch (Exception ex) {
-            Object payload = record.value();
             log.error("Failed to parse tenant invoice due event: topic={} partition={} offset={} key={} payloadType={} reason={}",
                     record.topic(), record.partition(), record.offset(), record.key(),
                     payload == null ? "null" : payload.getClass().getName(), ex.getMessage());
@@ -53,8 +57,8 @@ public class InvoiceFlowEventsListener {
                 delay,
                 event.getEventId()
         );
-        log.info("Consumed tenant invoice due event: tenantId={}, billingDate={}, delaySeconds={}, topic={}, partition={}, offset={}",
-                event.getTenantId(), event.getBillingDate(), event.getDelaySeconds(),
+        log.info("Consumed tenant invoice due event: eventId={} tenantId={} billingDate={} delaySeconds={} topic={} partition={} offset={}",
+                event.getEventId(), event.getTenantId(), event.getBillingDate(), event.getDelaySeconds(),
                 record.topic(), record.partition(), record.offset());
     }
 
@@ -63,10 +67,24 @@ public class InvoiceFlowEventsListener {
             groupId = "${spring.kafka.consumer.group-id}"
     )
     public void onOwnerUnitLinked(ConsumerRecord<String, Object> record) {
-        OwnerUnitLinkedEvent event = toEvent(record.value(), OwnerUnitLinkedEvent.class);
+        Object payload = record.value();
+        log.info("Received owner-unit linked event: topic={} partition={} offset={} key={} payloadType={}",
+                record.topic(), record.partition(), record.offset(), record.key(),
+                payload == null ? "null" : payload.getClass().getName());
+
+        OwnerUnitLinkedEvent event;
+        try {
+            event = toEvent(payload, OwnerUnitLinkedEvent.class);
+        } catch (Exception ex) {
+            log.error("Failed to parse owner-unit linked event: topic={} partition={} offset={} key={} payloadType={} reason={}",
+                    record.topic(), record.partition(), record.offset(), record.key(),
+                    payload == null ? "null" : payload.getClass().getName(), ex.getMessage());
+            throw ex;
+        }
+
         invoiceService.backfillOwnerForUnitInvoices(event.getTenantId(), event.getUnitId(), event.getOwnerId());
-        log.info("Consumed owner-unit linked event: tenantId={}, unitId={}, ownerId={}, topic={}, partition={}, offset={}",
-                event.getTenantId(), event.getUnitId(), event.getOwnerId(),
+        log.info("Consumed owner-unit linked event: eventId={} tenantId={} unitId={} ownerId={} topic={} partition={} offset={}",
+                event.getEventId(), event.getTenantId(), event.getUnitId(), event.getOwnerId(),
                 record.topic(), record.partition(), record.offset());
     }
 

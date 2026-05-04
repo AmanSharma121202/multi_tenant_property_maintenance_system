@@ -37,16 +37,19 @@ public class InvoiceFlowEventPublisher {
     }
 
     public void publishOwnerUnitLinked(OwnerUnitLinkedEvent event) {
+        log.info("Publishing owner-unit linked event: eventId={} tenantId={} unitId={} ownerId={} topic={} key={}",
+                event.getEventId(), event.getTenantId(), event.getUnitId(), event.getOwnerId(), ownerUnitLinkedTopic, event.getUnitId());
+
         kafkaTemplate.send(ownerUnitLinkedTopic, event.getUnitId(), event)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
-                        log.error("Failed to publish owner-unit linked event: tenantId={}, unitId={}, ownerId={}, reason={}",
-                                event.getTenantId(), event.getUnitId(), event.getOwnerId(), ex.getMessage());
+                        log.error("Failed to publish owner-unit linked event: eventId={} tenantId={} unitId={} ownerId={} topic={} reason={}",
+                                event.getEventId(), event.getTenantId(), event.getUnitId(), event.getOwnerId(), ownerUnitLinkedTopic, ex.getMessage());
                     } else {
-                        log.info("Published owner-unit linked event: tenantId={}, unitId={}, ownerId={}",
-                                event.getTenantId(), event.getUnitId(), event.getOwnerId());
+                        log.info("Published owner-unit linked event: eventId={} tenantId={} unitId={} ownerId={} topic={} partition={} offset={}",
+                                event.getEventId(), event.getTenantId(), event.getUnitId(), event.getOwnerId(),
+                                result.getRecordMetadata().topic(), result.getRecordMetadata().partition(), result.getRecordMetadata().offset());
                     }
                 });
     }
 }
-

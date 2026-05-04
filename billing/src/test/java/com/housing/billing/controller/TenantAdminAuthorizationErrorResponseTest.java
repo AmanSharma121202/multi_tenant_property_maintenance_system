@@ -9,13 +9,14 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@WithMockUser(roles = "TENANT")
+@WithMockUser(roles = "TENANT_ADMIN")
 class TenantAdminAuthorizationErrorResponseTest {
 
     @Autowired
@@ -51,5 +52,22 @@ class TenantAdminAuthorizationErrorResponseTest {
                 .andExpect(jsonPath("$.message").value("Unauthorized request"))
                 .andExpect(jsonPath("$.timestamp").exists());
     }
-}
 
+    @Test
+    void updateTenant_asTenantAdmin_returnsForbiddenWithErrorBody() throws Exception {
+        String payload = """
+                {
+                  "name": "Updated Tenant",
+                  "currency": "USD"
+                }
+                """;
+
+        mockMvc.perform(patch("/tenants/tenant::123")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+                .andExpect(jsonPath("$.message").value("Unauthorized request"))
+                .andExpect(jsonPath("$.timestamp").exists());
+    }
+}

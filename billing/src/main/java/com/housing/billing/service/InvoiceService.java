@@ -154,6 +154,7 @@ public class InvoiceService {
                 continue;
             }
 
+
             invoice.setOwnerId(ownerId);
             invoice.setUpdatedAt(Instant.now());
             modelValidationService.validate(invoice);

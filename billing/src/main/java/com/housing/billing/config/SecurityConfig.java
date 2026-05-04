@@ -53,9 +53,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/tenants").hasRole("SUPERADMIN")
 
                         // ---------- Tenant-scoped fetch ----------
-                        // Allow fetching a single tenant for any authenticated user;
+                        // Allow fetching a single tenant for SUPERADMIN or TENANT_ADMIN;
                         // TenantGuard will enforce path tenant == token tenant (unless SUPERADMIN).
-                        .requestMatchers(HttpMethod.GET, "/tenants/*").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/tenants/*").hasAnyRole("SUPERADMIN", "TENANT_ADMIN")
+
+                        // ---------- Tenant update ----------
+                        .requestMatchers(HttpMethod.PATCH, "/tenants/*").hasRole("SUPERADMIN")
 
                         // ---------- Everything else ----------
                         .anyRequest().authenticated()
