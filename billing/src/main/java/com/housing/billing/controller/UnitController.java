@@ -26,7 +26,7 @@ public class UnitController {
     public ResponseEntity<List<Unit>> list(
             @PathVariable String tenantId,
             @Parameter(
-                    description = "Unified filter expression. Example: unitNumber==\"A-102\" && active==true",
+                    description = "Unified filter expression.",
                     example = "unitNumber==\"A-102\" && active==true"
             )
             @RequestParam(required = false) String filter) {

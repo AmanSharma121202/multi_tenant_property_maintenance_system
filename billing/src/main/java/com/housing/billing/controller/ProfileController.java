@@ -26,7 +26,7 @@ public class ProfileController {
     public ResponseEntity<List<Profile>> list(
             @PathVariable String tenantId,
             @Parameter(
-                    description = "Unified filter expression. Example: code==\"1BHK\" && active==true",
+                    description = "Unified filter expression.",
                     example = "code==\"1BHK\" && active==true"
             )
             @RequestParam(required = false) String filter) {

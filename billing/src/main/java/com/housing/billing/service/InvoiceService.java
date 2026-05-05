@@ -10,7 +10,9 @@ import org.springframework.beans.factory.annotation.Value;
 import com.housing.billing.dto.request.GenerateInvoiceRequest;
 import com.housing.billing.exception.ResourceNotFoundException;
 import com.housing.billing.exception.TenantIsolationException;
+import com.housing.billing.exception.InvalidFilterSyntaxException;
 import com.housing.billing.filter.DynamicFilterEngine;
+import com.housing.billing.filter.FilterExpressionParser;
 import com.housing.billing.model.Invoice;
 import com.housing.billing.model.Profile;
 import com.housing.billing.model.Unit;
@@ -164,6 +166,7 @@ public class InvoiceService {
 
     public List<Invoice> list(String tenantId, String filter) {
         List<Invoice> tenantScopedInvoices = invoiceRepository.findAllByTenantId(tenantId);
+        validateInvoiceFilter(filter);
         return dynamicFilterEngine.apply(
                 tenantScopedInvoices,
                 filter,
@@ -171,6 +174,33 @@ public class InvoiceService {
                 FILTERABLE_FIELDS,
                 FILTER_VALUE_NOT_FOUND_MESSAGES
         );
+    }
+
+    private void validateInvoiceFilter(String filter) {
+        if (filter == null || filter.isBlank()) {
+            return;
+        }
+
+        FilterExpressionParser parser = new FilterExpressionParser();
+        FilterExpressionParser.Node root = parser.parse(filter);
+        boolean hasMonth = containsFilterField(root, "month");
+        boolean hasYear = containsFilterField(root, "year");
+
+        if (hasMonth && !hasYear) {
+            throw new InvalidFilterSyntaxException(
+                    "Filter by month requires year (example: year==2026 && month==5)"
+            );
+        }
+    }
+
+    private boolean containsFilterField(FilterExpressionParser.Node node, String field) {
+        if (node instanceof FilterExpressionParser.LogicalNode logicalNode) {
+            return containsFilterField(logicalNode.left(), field)
+                    || containsFilterField(logicalNode.right(), field);
+        }
+
+        FilterExpressionParser.ConditionNode condition = (FilterExpressionParser.ConditionNode) node;
+        return field.equals(condition.field());
     }
 
     public Invoice get(String tenantId, String invoiceId) {

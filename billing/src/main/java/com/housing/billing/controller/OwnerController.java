@@ -22,7 +22,7 @@ public class OwnerController {
     public ResponseEntity<List<Owner>> list(
             @PathVariable String tenantId,
             @Parameter(
-                    description = "Unified filter expression. Example: status==\"ACTIVE\" && name==\"John\"",
+                    description = "Unified filter expression.",
                     example = "status==\"ACTIVE\" && name==\"John\""
             )
             @RequestParam(required = false) String filter) {

@@ -30,7 +30,7 @@ public class PaymentController {
     public ResponseEntity<List<Payment>> list(
             @PathVariable String tenantId,
             @Parameter(
-                    description = "Unified filter expression. Example: method==\"UPI\" && amount>=500",
+                    description = "Unified filter expression.",
                     example = "method==\"UPI\" && amount>=500"
             )
             @RequestParam(required = false) String filter) {

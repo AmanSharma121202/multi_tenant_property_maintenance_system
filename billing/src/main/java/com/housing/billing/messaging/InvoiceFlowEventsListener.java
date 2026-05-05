@@ -1,6 +1,7 @@
 package com.housing.billing.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.housing.billing.repository.InvoiceRepository;
 import com.housing.billing.service.AsyncInvoiceGenerationService;
 import com.housing.billing.service.InvoiceService;
 import lombok.extern.slf4j.Slf4j;
@@ -16,13 +17,16 @@ public class InvoiceFlowEventsListener {
 
     private final AsyncInvoiceGenerationService asyncInvoiceGenerationService;
     private final InvoiceService invoiceService;
+    private final InvoiceRepository invoiceRepository;
     private final ObjectMapper objectMapper;
 
     public InvoiceFlowEventsListener(AsyncInvoiceGenerationService asyncInvoiceGenerationService,
                                      InvoiceService invoiceService,
+                                     InvoiceRepository invoiceRepository,
                                      ObjectMapper objectMapper) {
         this.asyncInvoiceGenerationService = asyncInvoiceGenerationService;
         this.invoiceService = invoiceService;
+        this.invoiceRepository = invoiceRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -47,6 +51,17 @@ public class InvoiceFlowEventsListener {
         }
 
         Duration delay = Duration.ofSeconds(Math.max(0L, event.getDelaySeconds()));
+        if (!invoiceRepository.findAnyByTenantIdAndYearAndMonth(
+                event.getTenantId(),
+                event.getBillingDate().getYear(),
+                event.getBillingDate().getMonthValue()
+        ).isEmpty()) {
+            log.info("Skipping tenant invoice generation; already exists: eventId={} tenantId={} cycle={}-{} topic={} partition={} offset={}",
+                    event.getEventId(), event.getTenantId(), event.getBillingDate().getYear(), event.getBillingDate().getMonthValue(),
+                    record.topic(), record.partition(), record.offset());
+            return;
+        }
+
         log.info("Dispatching tenant invoice event for async generation: eventId={} tenantId={} billingDate={} delaySeconds={} topic={} partition={} offset={}",
                 event.getEventId(), event.getTenantId(), event.getBillingDate(), event.getDelaySeconds(),
                 record.topic(), record.partition(), record.offset());
