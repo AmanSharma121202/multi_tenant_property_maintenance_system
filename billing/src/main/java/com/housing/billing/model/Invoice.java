@@ -11,6 +11,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.couchbase.core.mapping.Document;
+import org.springframework.data.couchbase.core.mapping.Field;
 import org.springframework.data.couchbase.repository.Collection;
 import org.springframework.data.couchbase.repository.Scope;
 
@@ -54,10 +55,12 @@ public class Invoice extends BaseDocument {
     @NotNull(message = "Closing balance is required")
     private BigDecimal closingBalance;   // = opening + charges + lateFee + adj - payments
     @NotBlank(message = "Status is required")
-    @Pattern(regexp = "^(PAID|PARTIAL|OVERDUE)$", message = "Status must be one of: PAID, PARTIAL, OVERDUE")
-    private String     status;           // PAID / PARTIAL / OVERDUE
+    @Pattern(regexp = "^(PAID|PARTIAL|DUE|OVERDUE)$", message = "Status must be one of: PAID, PARTIAL, DUE, OVERDUE")
+    private String     status;           // PAID / PARTIAL / DUE / OVERDUE
     @NotNull(message = "Issue date is required")
     private Instant issueDate;
     @NotNull(message = "Due date is required")
     private Instant    dueDate;
+    @Field("payment_date")
+    private Instant    paymentDate;
 }

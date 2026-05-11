@@ -113,7 +113,6 @@ public class InvoiceService {
         invoice.setAdjustments(adjustments);
         invoice.setPaymentsInPeriod(payments);
         invoice.setClosingBalance(closing);
-        invoice.setStatus(closing.compareTo(BigDecimal.ZERO) <= 0 ? "PAID" : "OVERDUE");
 
         // Keep manual values if provided; auto-compute only for null fields.
         Instant resolvedIssueDate = req.getIssueDate();
@@ -135,11 +134,16 @@ public class InvoiceService {
             resolvedDueDate = resolvedIssueDate.plus(paymentTermsDays, ChronoUnit.DAYS);
         }
 
+        Instant now = Instant.now();
+        String status = resolveInvoiceStatus(closing, payments, resolvedDueDate, now);
+        invoice.setStatus(status);
+        invoice.setPaymentDate("PAID".equals(status) ? now : null);
+
         invoice.setIssueDate(resolvedIssueDate);
         invoice.setDueDate(resolvedDueDate);
         invoice.setType("invoice");
         invoice.setTenantId(tenantId);
-        invoice.setCreatedAt(Instant.now());
+        invoice.setCreatedAt(now);
         modelValidationService.validate(invoice);
 
         return invoiceRepository.save(invoice);
@@ -231,16 +235,34 @@ public class InvoiceService {
 
         invoice.setClosingBalance(closing);
 
-        if (closing.compareTo(BigDecimal.ZERO) <= 0) {
-            invoice.setStatus("PAID");
-        } else if (invoice.getPaymentsInPeriod().compareTo(BigDecimal.ZERO) > 0) {
-            invoice.setStatus("PARTIAL");
+        Instant now = Instant.now();
+        String previousStatus = invoice.getStatus();
+        String newStatus = resolveInvoiceStatus(closing, invoice.getPaymentsInPeriod(), invoice.getDueDate(), now);
+
+        invoice.setStatus(newStatus);
+        if ("PAID".equals(newStatus)) {
+            if (!"PAID".equals(previousStatus)) {
+                invoice.setPaymentDate(now);
+            }
         } else {
-            invoice.setStatus("OVERDUE");
+            invoice.setPaymentDate(null);
         }
 
-        invoice.setUpdatedAt(Instant.now());
+        invoice.setUpdatedAt(now);
         return invoiceRepository.save(invoice);
+    }
+
+    private String resolveInvoiceStatus(BigDecimal closing, BigDecimal payments, Instant dueDate, Instant now) {
+        if (closing.compareTo(BigDecimal.ZERO) <= 0) {
+            return "PAID";
+        }
+        if (dueDate != null && now.isAfter(dueDate)) {
+            return "OVERDUE";
+        }
+        if (payments.compareTo(BigDecimal.ZERO) > 0) {
+            return "PARTIAL";
+        }
+        return "DUE";
     }
 
     private Invoice backfillExistingInvoiceOwnerIfMissing(Invoice invoice, String tenantId, String unitId) {

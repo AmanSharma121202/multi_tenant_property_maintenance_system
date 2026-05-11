@@ -30,7 +30,7 @@ public class LateFeeScheduler {
         final Instant now = Instant.now();
 
         tenantRepository.findAllTenants().forEach(tenant -> {
-            invoiceRepository.findOverdueByTenantId(tenant.getId())
+            invoiceRepository.findOverdueByTenantId(tenant.getId(), now)
                     .forEach(inv -> applyFeeForTenant(inv, tenant, now));
         });
     }
@@ -91,8 +91,6 @@ public class LateFeeScheduler {
         // Recompute status (same rules used in your InvoiceService.recalculate)
         if (newClosing.compareTo(BigDecimal.ZERO) <= 0) {
             invoice.setStatus("PAID");
-        } else if (payments.compareTo(BigDecimal.ZERO) > 0) {
-            invoice.setStatus("PARTIAL");
         } else {
             invoice.setStatus("OVERDUE");
         }
@@ -117,5 +115,3 @@ public class LateFeeScheduler {
         invoiceRepository.save(invoice);
     }
 }
-
-

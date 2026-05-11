@@ -1,7 +1,11 @@
 package com.housing.billing.config;
 
+import com.housing.billing.config.converters.InstantToStringConverter;
+import com.housing.billing.config.converters.StringToInstantConverter;
+import java.util.List;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.couchbase.config.AbstractCouchbaseConfiguration;
+import org.springframework.data.couchbase.core.convert.CouchbaseCustomConversions;
 import org.springframework.data.couchbase.repository.config.EnableCouchbaseRepositories;
 
 @Configuration
@@ -36,5 +40,13 @@ public class CouchbaseConfig extends AbstractCouchbaseConfiguration {
     @Override
     protected boolean autoIndexCreation() {
         return false;
+    }
+
+    @Override
+    public CouchbaseCustomConversions customConversions() {
+        return new CouchbaseCustomConversions(List.of(
+                new InstantToStringConverter(),
+                new StringToInstantConverter()
+        ));
     }
 }
