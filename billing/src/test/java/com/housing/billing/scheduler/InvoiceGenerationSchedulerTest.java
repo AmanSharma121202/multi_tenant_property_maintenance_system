@@ -175,7 +175,7 @@ class InvoiceGenerationSchedulerTest {
 	private Tenant tenant(String id, LocalDate invoiceDate) {
 		Tenant tenant = new Tenant();
 		tenant.setId(id);
-		tenant.setInvoiceDate(invoiceDate);
+		tenant.setBillingDate(invoiceDate);
 		return tenant;
 	}
 }

@@ -1,5 +1,6 @@
 package com.housing.billing.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.housing.billing.validation.AllowedConfigValue;
@@ -22,8 +23,9 @@ public class UpdateTenantRequest {
     private String currency;
 
     @Schema(example = "2026-04-20")
-    @JsonProperty("invoice_date")
-    private LocalDate invoiceDate;
+    @JsonProperty("billing_date")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private LocalDate billingDate;
 
     @Schema(example = "PERCENTAGE")
     @AllowedConfigValue(type = AllowedValueType.LATE_FEE_TYPE, message = "lateFeeType must be one of configured validLateFeeType values")

@@ -1,5 +1,6 @@
 package com.housing.billing.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.housing.billing.validation.AllowedConfigValue;
@@ -26,9 +27,10 @@ public class CreateTenantRequest {
     private String currency;    // e.g. INR
     
     @Schema(example = "2026-04-20")
-    @NotNull(message = "invoice_date is required")
-    @JsonProperty("invoice_date")
-    private LocalDate invoiceDate;
+    @NotNull(message = "billing_date is required")
+    @JsonProperty("billing_date")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private LocalDate billingDate;
 
     @Schema(example = "PERCENTAGE")
     @NotBlank(message = "lateFeeType is required")

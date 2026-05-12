@@ -9,8 +9,10 @@ import com.housing.billing.exception.TenantIsolationException;
 import com.housing.billing.messaging.InvoiceFlowEventPublisher;
 import com.housing.billing.messaging.OwnerUnitLinkedEvent;
 import com.housing.billing.model.Owner;
+import com.housing.billing.model.Profile;
 import com.housing.billing.model.Unit;
 import com.housing.billing.repository.OwnerRepository;
+import com.housing.billing.repository.ProfileRepository;
 import com.housing.billing.repository.UnitRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,6 +31,7 @@ public class UnitService {
 
     private final UnitRepository unitRepository;
     private final OwnerRepository ownerRepository;
+    private final ProfileRepository profileRepository;
     private final InvoiceService invoiceService;
     private final InvoiceFlowEventPublisher invoiceFlowEventPublisher;
     private final DynamicFilterEngine dynamicFilterEngine;
@@ -61,15 +64,17 @@ public class UnitService {
 
     public Unit create(String tenantId, CreateUnitRequest req) {
         String normalizedUnitNumber = req.getUnitNumber().trim();
+        String normalizedProfileCode = req.getProfileCode().trim();
         unitRepository.findByTenantIdAndUnitNumberIgnoreCase(tenantId, normalizedUnitNumber).ifPresent(existing -> {
             throw new IllegalStateException("Unit already exists");
         });
+        validateProfileCodeExists(tenantId, normalizedProfileCode);
 
         Unit unit = new Unit();
         unit.setId("unit::" + UUID.randomUUID());
         unit.setTenantId(tenantId);
         unit.setUnitNumber(normalizedUnitNumber);
-        unit.setProfileCode(req.getProfileCode().trim());
+        unit.setProfileCode(normalizedProfileCode);
         unit.setActive(req.isActive());
         unit.setType("unit");
         unit.setCreatedAt(Instant.now());
@@ -91,11 +96,20 @@ public class UnitService {
     public Unit update(String tenantId, String unitId, UpdateUnitRequest req) {
         Unit unit = get(tenantId, unitId);
         if (req.getUnitNumber()  != null) unit.setUnitNumber(req.getUnitNumber());
-        if (req.getProfileCode() != null) unit.setProfileCode(req.getProfileCode());
+        if (req.getProfileCode() != null) {
+            String normalizedProfileCode = req.getProfileCode().trim();
+            validateProfileCodeExists(tenantId, normalizedProfileCode);
+            unit.setProfileCode(normalizedProfileCode);
+        }
         if (req.getActive()      != null) unit.setActive(req.getActive());
         unit.setUpdatedAt(Instant.now());
         modelValidationService.validate(unit);
         return unitRepository.save(unit);
+    }
+
+    private void validateProfileCodeExists(String tenantId, String profileCode) {
+        profileRepository.findByTenantIdAndCode(tenantId, profileCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Profile not found"));
     }
 
     public void deactivate(String tenantId, String unitId) {

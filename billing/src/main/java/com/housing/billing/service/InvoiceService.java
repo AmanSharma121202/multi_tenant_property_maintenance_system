@@ -122,7 +122,7 @@ public class InvoiceService {
             Tenant tenant = tenantRepository.findById(tenantId)
                     .orElseThrow(() -> new ResourceNotFoundException("Tenant not found"));
 
-            int preferredDay = tenant.getInvoiceDate() == null ? 1 : tenant.getInvoiceDate().getDayOfMonth();
+            int preferredDay = tenant.getBillingDate() == null ? 1 : tenant.getBillingDate().getDayOfMonth();
             int maxDay = YearMonth.of(req.getYear(), req.getMonth()).lengthOfMonth();
             int issueDay = Math.min(preferredDay, maxDay);
 

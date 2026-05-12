@@ -1,5 +1,6 @@
 package com.housing.billing.model;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -9,6 +10,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.couchbase.core.mapping.Document;
+import org.springframework.data.couchbase.core.mapping.Field;
 import org.springframework.data.couchbase.repository.Collection;
 import org.springframework.data.couchbase.repository.Scope;
 
@@ -28,9 +30,11 @@ public class Tenant extends BaseDocument {
     @NotBlank(message = "Currency is required")
     @Pattern(regexp = "^[A-Z]{3}$", message = "Currency must be a 3-letter ISO code (e.g. INR)")
     private String currency;      // e.g. INR
-    @NotNull(message = "Invoice date is required")
-    @JsonProperty("invoice_date")
-    private LocalDate invoiceDate; // Official tenant billing date for invoice generation
+    @NotNull(message = "Billing date is required")
+    @JsonProperty("billing_date")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    @Field("billing_date")
+    private LocalDate billingDate; // Official tenant billing date for invoice generation
     @NotBlank(message = "Late fee type is required")
     @Pattern(regexp = "^(PERCENTAGE|FIXED|NONE)$",
             message = "Late fee type must be one of: PERCENTAGE, FIXED, NONE")

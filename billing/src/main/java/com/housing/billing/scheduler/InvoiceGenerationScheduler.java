@@ -70,7 +70,7 @@ public class InvoiceGenerationScheduler {
         int tenantFailureCount = 0;
         for (Tenant tenant : tenants) {
             try {
-                LocalDate tenantBillingAnchor = tenant.getInvoiceDate();
+                LocalDate tenantBillingAnchor = tenant.getBillingDate();
                 if (tenantBillingAnchor == null) {
                     skippedNoAnchorCount++;
                     log.debug("Skipping tenant in scheduler: tenant={} reason=no-invoice-anchor", tenant.getId());
@@ -134,4 +134,3 @@ public class InvoiceGenerationScheduler {
         return (msg == null || msg.isBlank()) ? "Unknown scheduling failure" : msg;
     }
 }
-
