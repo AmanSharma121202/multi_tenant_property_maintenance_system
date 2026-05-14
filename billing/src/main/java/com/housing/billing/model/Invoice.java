@@ -55,8 +55,8 @@ public class Invoice extends BaseDocument {
     @NotNull(message = "Closing balance is required")
     private BigDecimal closingBalance;   // = opening + charges + lateFee + adj - payments
     @NotBlank(message = "Status is required")
-    @Pattern(regexp = "^(PAID|PARTIAL|DUE|OVERDUE)$", message = "Status must be one of: PAID, PARTIAL, DUE, OVERDUE")
-    private String     status;           // PAID / PARTIAL / DUE / OVERDUE
+    @Pattern(regexp = "^(PAID|DUE|OVERDUE)$", message = "Status must be one of: PAID, DUE, OVERDUE")
+    private String     status;           // PAID / DUE / OVERDUE
     @NotNull(message = "Issue date is required")
     private Instant issueDate;
     @NotNull(message = "Due date is required")

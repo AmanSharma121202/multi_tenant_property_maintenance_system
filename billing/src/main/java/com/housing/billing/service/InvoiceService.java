@@ -265,9 +265,6 @@ public class InvoiceService {
         if (dueDate != null && now.isAfter(dueDate)) {
             return "OVERDUE";
         }
-        if (payments.compareTo(BigDecimal.ZERO) > 0) {
-            return "PARTIAL";
-        }
         return "DUE";
     }
 
