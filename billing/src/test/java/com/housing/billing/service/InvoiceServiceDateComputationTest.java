@@ -134,26 +134,23 @@ class InvoiceServiceDateComputationTest {
     }
 
     @Test
-    void backfillOwnerForUnitInvoices_updatesOnlyInvoicesMissingOwner() {
-        Invoice missingOwner = new Invoice();
-        missingOwner.setId("INV-unit::101-202604");
-        missingOwner.setTenantId("tenant::1");
-        missingOwner.setUnitId("unit::101");
+    void generate_appliesUnitBalanceWhenFullyCovered() {
+        GenerateInvoiceRequest req = baseRequest();
 
-        Invoice alreadyOwned = new Invoice();
-        alreadyOwned.setId("INV-unit::101-202603");
-        alreadyOwned.setTenantId("tenant::1");
-        alreadyOwned.setUnitId("unit::101");
-        alreadyOwned.setOwnerId("owner::existing");
+        Unit creditedUnit = new Unit();
+        creditedUnit.setId("unit::101");
+        creditedUnit.setTenantId("tenant::1");
+        creditedUnit.setProfileCode("2BHK");
+        creditedUnit.setUnitBalance(new BigDecimal("15000"));
+        when(unitRepository.findById("unit::101")).thenReturn(Optional.of(creditedUnit));
+        when(unitRepository.save(any(Unit.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        when(invoiceRepository.findByTenantIdAndUnitId("tenant::1", "unit::101"))
-                .thenReturn(List.of(missingOwner, alreadyOwned));
+        Invoice generated = invoiceService.generate("tenant::1", req);
 
-        invoiceService.backfillOwnerForUnitInvoices("tenant::1", "unit::101", "owner::42");
-
-        assertEquals("owner::42", missingOwner.getOwnerId());
-        assertEquals("owner::existing", alreadyOwned.getOwnerId());
-        verify(invoiceRepository, times(1)).save(missingOwner);
+        assertEquals(new BigDecimal("0"), generated.getClosingBalance());
+        assertEquals(new BigDecimal("12000"), generated.getPaymentsInPeriod());
+        assertEquals(new BigDecimal("3000"), creditedUnit.getUnitBalance());
+        verify(unitRepository, times(1)).save(creditedUnit);
     }
 
     private GenerateInvoiceRequest baseRequest() {

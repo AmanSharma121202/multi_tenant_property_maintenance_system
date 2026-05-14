@@ -10,6 +10,8 @@ import org.springframework.data.couchbase.core.mapping.Document;
 import org.springframework.data.couchbase.repository.Collection;
 import org.springframework.data.couchbase.repository.Scope;
 
+import java.math.BigDecimal;
+
 @Document
 @Collection("units")
 @Scope("main")
@@ -29,4 +31,8 @@ public class Unit extends BaseDocument {
     @Pattern(regexp = "^$|^owner::.+$", message = "Invalid ownerId format")
     private String  ownerId;      // Set when an owner is linked to this unit
     private boolean active;
+
+    private BigDecimal dueAmount;
+    private BigDecimal unitBalance;
+    private BigDecimal totalBalance;
 }

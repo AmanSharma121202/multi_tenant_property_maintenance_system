@@ -6,6 +6,7 @@ import com.housing.billing.model.Invoice;
 import com.housing.billing.model.Payment;
 import com.housing.billing.repository.InvoiceRepository;
 import com.housing.billing.repository.PaymentRepository;
+import com.housing.billing.repository.UnitRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -37,6 +38,8 @@ class PaymentServiceIdempotencyTest {
     private DynamicFilterEngine dynamicFilterEngine;
     @Mock
     private ModelValidationService modelValidationService;
+    @Mock
+    private UnitRepository unitRepository;
 
     @Test
     void update_updatesOnlyMetadataFields_andNeverRecomputesInvoice() {
@@ -48,6 +51,7 @@ class PaymentServiceIdempotencyTest {
                 paymentRepository,
                 invoiceRepository,
                 invoiceService,
+                unitRepository,
                 dynamicFilterEngine,
                 modelValidationService
         );

@@ -8,9 +8,11 @@ import com.housing.billing.exception.ResourceNotFoundException;
 import com.housing.billing.exception.TenantIsolationException;
 import com.housing.billing.messaging.InvoiceFlowEventPublisher;
 import com.housing.billing.messaging.OwnerUnitLinkedEvent;
+import com.housing.billing.model.Invoice;
 import com.housing.billing.model.Owner;
 import com.housing.billing.model.Profile;
 import com.housing.billing.model.Unit;
+import com.housing.billing.repository.InvoiceRepository;
 import com.housing.billing.repository.OwnerRepository;
 import com.housing.billing.repository.ProfileRepository;
 import com.housing.billing.repository.UnitRepository;
@@ -18,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +35,7 @@ public class UnitService {
     private final UnitRepository unitRepository;
     private final OwnerRepository ownerRepository;
     private final ProfileRepository profileRepository;
+    private final InvoiceRepository invoiceRepository;
     private final InvoiceService invoiceService;
     private final InvoiceFlowEventPublisher invoiceFlowEventPublisher;
     private final DynamicFilterEngine dynamicFilterEngine;
@@ -53,13 +57,15 @@ public class UnitService {
 
     public List<Unit> list(String tenantId, String filter) {
         List<Unit> tenantScopedUnits = unitRepository.findByTenantId(tenantId);
-        return dynamicFilterEngine.apply(
+        List<Unit> filteredUnits = dynamicFilterEngine.apply(
                 tenantScopedUnits,
                 filter,
                 Unit.class,
                 FILTERABLE_FIELDS,
                 FILTER_VALUE_NOT_FOUND_MESSAGES
         );
+        filteredUnits.forEach(unit -> enrichUnitBalances(tenantId, unit));
+        return filteredUnits;
     }
 
     public Unit create(String tenantId, CreateUnitRequest req) {
@@ -76,10 +82,14 @@ public class UnitService {
         unit.setUnitNumber(normalizedUnitNumber);
         unit.setProfileCode(normalizedProfileCode);
         unit.setActive(req.isActive());
+        unit.setDueAmount(BigDecimal.ZERO);
+        unit.setUnitBalance(BigDecimal.ZERO);
+        unit.setTotalBalance(BigDecimal.ZERO);
         unit.setType("unit");
         unit.setCreatedAt(Instant.now());
         modelValidationService.validate(unit);
-        return unitRepository.save(unit);
+        Unit saved = unitRepository.save(unit);
+        return enrichUnitBalances(tenantId, saved);
     }
 
     public Unit get(String tenantId, String unitId) {
@@ -90,7 +100,7 @@ public class UnitService {
             throw new TenantIsolationException("Tenant isolation violation");
         }
 
-        return unit;
+        return enrichUnitBalances(tenantId, unit);
     }
 
     public Unit update(String tenantId, String unitId, UpdateUnitRequest req) {
@@ -104,7 +114,46 @@ public class UnitService {
         if (req.getActive()      != null) unit.setActive(req.getActive());
         unit.setUpdatedAt(Instant.now());
         modelValidationService.validate(unit);
-        return unitRepository.save(unit);
+        Unit saved = unitRepository.save(unit);
+        return enrichUnitBalances(tenantId, saved);
+    }
+
+    private Unit enrichUnitBalances(String tenantId, Unit unit) {
+        List<Invoice> invoices = invoiceRepository.findByTenantIdAndUnitId(tenantId, unit.getId());
+        BigDecimal totalUnpaid = BigDecimal.ZERO;
+        for (Invoice invoice : invoices) {
+            BigDecimal closing = invoice.getClosingBalance() == null ? BigDecimal.ZERO : invoice.getClosingBalance();
+            if (closing.signum() > 0 && invoice.getStatus() != null && !"PAID".equals(invoice.getStatus())) {
+                totalUnpaid = totalUnpaid.add(closing);
+            }
+        }
+        BigDecimal unitBalance = unit.getUnitBalance() == null ? BigDecimal.ZERO : unit.getUnitBalance();
+        BigDecimal dueAmount = totalUnpaid.subtract(unitBalance);
+        if (dueAmount.signum() < 0) {
+            dueAmount = BigDecimal.ZERO;
+        }
+        BigDecimal totalBalance = unit.getTotalBalance() == null ? BigDecimal.ZERO : unit.getTotalBalance();
+        boolean changed = !sameAmount(unit.getDueAmount(), dueAmount)
+                || !sameAmount(unit.getUnitBalance(), unitBalance)
+                || !sameAmount(unit.getTotalBalance(), totalBalance);
+        unit.setDueAmount(dueAmount);
+        unit.setUnitBalance(unitBalance);
+        unit.setTotalBalance(totalBalance);
+        if (changed) {
+            unit.setUpdatedAt(Instant.now());
+            unitRepository.save(unit);
+        }
+        return unit;
+    }
+
+    private boolean sameAmount(BigDecimal left, BigDecimal right) {
+        if (left == null && right == null) {
+            return true;
+        }
+        if (left == null || right == null) {
+            return false;
+        }
+        return left.compareTo(right) == 0;
     }
 
     private void validateProfileCodeExists(String tenantId, String profileCode) {

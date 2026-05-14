@@ -100,6 +100,12 @@ public class InvoiceService {
                 .add(lateFee)
                 .subtract(payments);
 
+        BigDecimal appliedBalance = applyUnitBalanceToInvoice(unit, closing);
+        if (appliedBalance.signum() > 0) {
+            payments = payments.add(appliedBalance);
+            closing = closing.subtract(appliedBalance);
+        }
+
         Invoice invoice = new Invoice();
         invoice.setId(invoiceId);
         invoice.setTenantId(tenantId);
@@ -284,5 +290,21 @@ public class InvoiceService {
         invoice.setUpdatedAt(Instant.now());
         modelValidationService.validate(invoice);
         return invoiceRepository.save(invoice);
+    }
+
+    private BigDecimal applyUnitBalanceToInvoice(Unit unit, BigDecimal closing) {
+        if (closing.signum() <= 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal balance = unit.getUnitBalance() == null ? BigDecimal.ZERO : unit.getUnitBalance();
+        if (balance.compareTo(closing) < 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal applied = closing;
+        unit.setUnitBalance(balance.subtract(applied));
+        unit.setUpdatedAt(Instant.now());
+        modelValidationService.validate(unit);
+        unitRepository.save(unit);
+        return applied;
     }
 }

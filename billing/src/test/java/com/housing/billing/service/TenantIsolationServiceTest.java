@@ -128,7 +128,6 @@ class TenantIsolationServiceTest {
         when(unitRepository.findById("unit::1")).thenReturn(Optional.of(unit));
 
         assertThrows(IllegalStateException.class, () -> unitService.deactivate("tenant-a", "unit::1"));
-        verify(unitRepository, never()).save(org.mockito.ArgumentMatchers.any(Unit.class));
     }
 
     @Test
@@ -206,7 +205,6 @@ class TenantIsolationServiceTest {
         assertEquals("2BHK", updated.getCode());
         verify(profileRepository).save(any(Profile.class));
     }
-
     @Test
     void tenantCreateThrowsWhenTenantAlreadyExists() {
         CreateTenantRequest req = new CreateTenantRequest();
@@ -273,4 +271,3 @@ class TenantIsolationServiceTest {
         verify(unitRepository, never()).save(any(Unit.class));
     }
 }
-
