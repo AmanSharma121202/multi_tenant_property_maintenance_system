@@ -21,12 +21,17 @@ public interface InvoiceRepository extends CouchbaseRepository<Invoice, String> 
             " ORDER BY i.year DESC, i.month DESC")
     List<Invoice> findByTenantIdAndUnitId(String tenantId, String unitId);
 
-
     @Query("SELECT META().id AS __id, META().cas AS __cas, i.*" +
             " FROM `prop-tax`.`main`.`invoices` i" +
             " WHERE i.tenantId = $1 AND i.year = $2 AND i.month = $3" +
             " LIMIT 1")
     List<Invoice> findAnyByTenantIdAndYearAndMonth(String tenantId, int year, int month);
+
+    @Query("SELECT META().id AS __id, META().cas AS __cas, i.*" +
+            " FROM `prop-tax`.`main`.`invoices` i" +
+            " WHERE i.tenantId = $1 AND i.unitId = $2 AND i.year = $3 AND i.month = $4" +
+            " LIMIT 1")
+    List<Invoice> findAnyByTenantIdAndUnitIdAndYearAndMonth(String tenantId, String unitId, int year, int month);
 
     @Query("SELECT META().id AS __id, META().cas AS __cas, i.*" +
             " FROM `prop-tax`.`main`.`invoices` i" +

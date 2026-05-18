@@ -1,6 +1,7 @@
 package com.housing.billing.service;
 
 import com.housing.billing.dto.request.GenerateInvoiceRequest;
+import com.housing.billing.repository.InvoiceRepository;
 import com.housing.billing.repository.UnitRepository;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -20,13 +21,16 @@ public class AsyncInvoiceGenerationService {
 
     private final UnitRepository unitRepository;
     private final InvoiceService invoiceService;
+    private final InvoiceRepository invoiceRepository;
     private final Executor invoiceGenerationExecutor;
 
     public AsyncInvoiceGenerationService(UnitRepository unitRepository,
                                          InvoiceService invoiceService,
+                                         InvoiceRepository invoiceRepository,
                                          @Qualifier("invoiceGenerationExecutor") Executor invoiceGenerationExecutor) {
         this.unitRepository = unitRepository;
         this.invoiceService = invoiceService;
+        this.invoiceRepository = invoiceRepository;
         this.invoiceGenerationExecutor = invoiceGenerationExecutor;
     }
 
@@ -57,7 +61,7 @@ public class AsyncInvoiceGenerationService {
         long startedAtMs = System.currentTimeMillis();
         List<String> unitIds;
         try {
-            unitIds = unitRepository.findByTenantId(tenantId).stream()
+            unitIds = unitRepository.findByTenantIdAndActive(tenantId, true).stream()
                     .map(unit -> unit.getId())
                     .toList();
         } catch (Exception ex) {
@@ -67,7 +71,7 @@ public class AsyncInvoiceGenerationService {
         }
 
         if (unitIds.isEmpty()) {
-            log.warn("Tenant invoice generation skipped: flowId={} tenant={} billingDate={} reason=no-units",
+            log.warn("Tenant invoice generation skipped: flowId={} tenant={} billingDate={} reason=no-active-units",
                     flowId, tenantId, invoiceDate);
             return;
         }
@@ -77,9 +81,20 @@ public class AsyncInvoiceGenerationService {
 
         int successCount = 0;
         int failureCount = 0;
+        int skippedExistingCount = 0;
 
         for (String unitId : unitIds) {
             try {
+                boolean alreadyGenerated = !invoiceRepository
+                        .findAnyByTenantIdAndUnitIdAndYearAndMonth(tenantId, unitId, invoiceDate.getYear(), invoiceDate.getMonthValue())
+                        .isEmpty();
+                if (alreadyGenerated) {
+                    skippedExistingCount++;
+                    log.debug("Tenant invoice generation skipped: flowId={} tenant={} unit={} cycle={}-{} reason=already-exists",
+                            flowId, tenantId, unitId, invoiceDate.getYear(), invoiceDate.getMonthValue());
+                    continue;
+                }
+
                 GenerateInvoiceRequest req = new GenerateInvoiceRequest();
                 req.setUnitId(unitId);
                 req.setYear(invoiceDate.getYear());
@@ -97,8 +112,8 @@ public class AsyncInvoiceGenerationService {
         }
 
         long durationMs = System.currentTimeMillis() - startedAtMs;
-        log.info("Tenant invoice generation completed: flowId={} tenant={} billingDate={} unitCount={} successCount={} failureCount={} durationMs={}",
-                flowId, tenantId, invoiceDate, unitIds.size(), successCount, failureCount, durationMs);
+        log.info("Tenant invoice generation completed: flowId={} tenant={} billingDate={} unitCount={} successCount={} skippedExistingCount={} failureCount={} durationMs={}",
+                flowId, tenantId, invoiceDate, unitIds.size(), successCount, skippedExistingCount, failureCount, durationMs);
     }
 
     private String rootMessage(Throwable throwable) {
@@ -110,5 +125,3 @@ public class AsyncInvoiceGenerationService {
         return (msg == null || msg.isBlank()) ? "Invoice generation failed" : msg;
     }
 }
-
-

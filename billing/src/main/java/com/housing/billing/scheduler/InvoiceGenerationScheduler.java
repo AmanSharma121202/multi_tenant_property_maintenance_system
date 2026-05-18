@@ -3,20 +3,21 @@ package com.housing.billing.scheduler;
 import com.housing.billing.messaging.InvoiceFlowEventPublisher;
 import com.housing.billing.messaging.TenantInvoiceDueEvent;
 import com.housing.billing.model.Tenant;
-import com.housing.billing.repository.InvoiceRepository;
 import com.housing.billing.repository.TenantRepository;
+import com.housing.billing.service.AsyncInvoiceGenerationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.DateTimeException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
+import java.time.DateTimeException;
 
 @Component
 @RequiredArgsConstructor
@@ -24,8 +25,8 @@ import java.util.UUID;
 public class InvoiceGenerationScheduler {
 
     private final TenantRepository tenantRepository;
-    private final InvoiceRepository invoiceRepository;
     private final InvoiceFlowEventPublisher invoiceFlowEventPublisher;
+    private final AsyncInvoiceGenerationService asyncInvoiceGenerationService;
 
     @Value("${app.async.invoice-generation.tenant-timezone:UTC}")
     private String tenantTimezone;
@@ -37,8 +38,7 @@ public class InvoiceGenerationScheduler {
     public void scheduleTenantInvoices() {
         long tickStartedAtMs = System.currentTimeMillis();
         if (!kafkaEnabled) {
-            log.warn("Skipping tenant invoice scheduling because Kafka event mode is disabled");
-            return;
+            log.warn("Kafka disabled; running tenant invoice generation in-process");
         }
 
         ZoneId zoneId;
@@ -64,9 +64,9 @@ public class InvoiceGenerationScheduler {
         }
 
         int publishedCount = 0;
+        int directDispatchCount = 0;
         int skippedNoAnchorCount = 0;
         int skippedNotDueCount = 0;
-        int skippedAlreadyGeneratedCount = 0;
         int tenantFailureCount = 0;
         for (Tenant tenant : tenants) {
             try {
@@ -87,16 +87,6 @@ public class InvoiceGenerationScheduler {
                     continue;
                 }
 
-                boolean alreadyGenerated = !invoiceRepository
-                        .findAnyByTenantIdAndYearAndMonth(tenant.getId(), today.getYear(), today.getMonthValue())
-                        .isEmpty();
-                if (alreadyGenerated) {
-                    skippedAlreadyGeneratedCount++;
-                    log.debug("Skipping tenant in scheduler: tenant={} reason=already-generated cycle={}-{}",
-                            tenant.getId(), today.getYear(), today.getMonthValue());
-                    continue;
-                }
-
                 // Generate invoice for the current billing cycle.
                 LocalDate billingDate = today;
 
@@ -107,10 +97,23 @@ public class InvoiceGenerationScheduler {
                         .delaySeconds(0)
                         .occurredAt(Instant.now())
                         .build();
-                invoiceFlowEventPublisher.publishTenantInvoiceDue(event);
-                publishedCount++;
-                log.info("Scheduler queued tenant invoice due event: eventId={} tenant={} cycle={}-{}",
-                        event.getEventId(), tenant.getId(), today.getYear(), today.getMonthValue());
+
+                if (kafkaEnabled) {
+                    invoiceFlowEventPublisher.publishTenantInvoiceDue(event);
+                    publishedCount++;
+                    log.info("Scheduler queued tenant invoice due event: eventId={} tenant={} cycle={}-{}",
+                            event.getEventId(), tenant.getId(), today.getYear(), today.getMonthValue());
+                } else {
+                    asyncInvoiceGenerationService.scheduleTenantInvoiceGeneration(
+                            tenant.getId(),
+                            billingDate,
+                            Duration.ZERO,
+                            event.getEventId()
+                    );
+                    directDispatchCount++;
+                    log.info("Scheduler dispatched tenant invoice generation in-process: flowId={} tenant={} cycle={}-{}",
+                            event.getEventId(), tenant.getId(), today.getYear(), today.getMonthValue());
+                }
             } catch (Exception ex) {
                 tenantFailureCount++;
                 log.error("Tenant invoice scheduling failed for tenant={} on cycle={}-{}: {}",
@@ -120,9 +123,9 @@ public class InvoiceGenerationScheduler {
         }
 
         long tickDurationMs = System.currentTimeMillis() - tickStartedAtMs;
-        log.info("Tenant invoice scheduling tick completed: date={} tenantsScanned={} eventsPublished={} skippedNoAnchor={} skippedNotDue={} skippedAlreadyGenerated={} tenantFailures={} durationMs={}",
-                today, tenants.size(), publishedCount, skippedNoAnchorCount, skippedNotDueCount,
-                skippedAlreadyGeneratedCount, tenantFailureCount, tickDurationMs);
+        log.info("Tenant invoice scheduling tick completed: date={} tenantsScanned={} eventsPublished={} directDispatches={} skippedNoAnchor={} skippedNotDue={} tenantFailures={} durationMs={}",
+                today, tenants.size(), publishedCount, directDispatchCount, skippedNoAnchorCount, skippedNotDueCount,
+                tenantFailureCount, tickDurationMs);
     }
 
     private String rootMessage(Throwable throwable) {

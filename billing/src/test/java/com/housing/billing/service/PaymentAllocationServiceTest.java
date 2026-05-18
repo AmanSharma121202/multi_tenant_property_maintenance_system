@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
@@ -77,7 +76,7 @@ class PaymentAllocationServiceTest {
     }
 
     @Test
-    void record_whenTargetNotCovered_throws() {
+    void record_whenTargetNotCovered_accumulatesBalance() {
         Invoice targetInvoice = invoice("INV-unit::1-202605", "unit::1", "owner::1", 2026, 5, "OVERDUE", new BigDecimal("100"), new BigDecimal("0"));
         Unit unit = new Unit();
         unit.setId("unit::1");
@@ -86,18 +85,23 @@ class PaymentAllocationServiceTest {
 
         when(paymentRepository.findById(anyString())).thenReturn(Optional.empty());
         when(invoiceService.get("tenant::1", "INV-unit::1-202605")).thenReturn(targetInvoice);
+        when(invoiceRepository.findByTenantIdAndUnitId("tenant::1", "unit::1"))
+                .thenReturn(List.of(targetInvoice));
         when(unitRepository.findById("unit::1")).thenReturn(Optional.of(unit));
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         RecordPaymentRequest req = new RecordPaymentRequest();
         req.setInvoiceId("INV-unit::1-202605");
         req.setMethod("UPI");
         req.setAmount(new BigDecimal("60"));
 
-        assertThrows(IllegalStateException.class, () -> paymentService.record("tenant::1", req, "idempotent-key"));
+        Payment saved = paymentService.record("tenant::1", req, "idempotent-key");
 
-        verify(paymentRepository, times(0)).save(any(Payment.class));
+        assertEquals(new BigDecimal("60"), saved.getAmount());
+        assertEquals(new BigDecimal("60"), unit.getUnitBalance());
+        verify(paymentRepository, times(1)).save(any(Payment.class));
         verify(invoiceRepository, times(0)).save(any(Invoice.class));
-        verify(unitRepository, times(0)).save(any(Unit.class));
+        verify(unitRepository, times(1)).save(unit);
     }
 
     private Invoice invoice(String id, String unitId, String ownerId, int year, int month, String status,

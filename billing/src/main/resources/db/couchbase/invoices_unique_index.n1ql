@@ -1,0 +1,4 @@
+-- Enforce one invoice per unit per billing cycle (per tenant) at the database level.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_unit_cycle
+ON `prop-tax`.`main`.`invoices`(tenantId, unitId, year, month);
+

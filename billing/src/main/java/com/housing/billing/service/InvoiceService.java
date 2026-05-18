@@ -72,6 +72,14 @@ public class InvoiceService {
             return backfillExistingInvoiceOwnerIfMissing(existing.get(), tenantId, req.getUnitId());
         }
 
+        Optional<Invoice> existingByCycle = invoiceRepository
+                .findAnyByTenantIdAndUnitIdAndYearAndMonth(tenantId, req.getUnitId(), req.getYear(), req.getMonth())
+                .stream()
+                .findFirst();
+        if (existingByCycle.isPresent()) {
+            return backfillExistingInvoiceOwnerIfMissing(existingByCycle.get(), tenantId, req.getUnitId());
+        }
+
         // 3. Get the previous month's closing balance = this month's opening balance
         int prevMonth = req.getMonth() == 1 ? 12 : req.getMonth() - 1;
         int prevYear  = req.getMonth() == 1 ? req.getYear() - 1 : req.getYear();

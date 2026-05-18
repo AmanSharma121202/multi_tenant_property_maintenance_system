@@ -63,7 +63,6 @@ public class PaymentService {
         if (invoice.getOwnerId() == null || invoice.getOwnerId().isBlank()) {
             throw new IllegalStateException("Cannot record payment: invoice is not linked to an owner");
         }
-        validatePaymentCanSettleTarget(tenantId, invoice, req.getAmount());
 
         // 3) Create & save new payment
         Payment payment = new Payment();
@@ -87,22 +86,6 @@ public class PaymentService {
         applyPaymentToUnitBalance(tenantId, invoice, req.getAmount());
 
         return saved;
-    }
-
-    private void validatePaymentCanSettleTarget(String tenantId, Invoice invoice, BigDecimal amount) {
-        if (amount.signum() <= 0) {
-            return;
-        }
-        if (!isPayable(invoice)) {
-            return;
-        }
-        Unit unit = loadUnitForPayment(tenantId, invoice.getUnitId());
-        BigDecimal current = unit.getUnitBalance() == null ? BigDecimal.ZERO : unit.getUnitBalance();
-        BigDecimal available = current.add(amount);
-        BigDecimal closing = invoice.getClosingBalance() == null ? BigDecimal.ZERO : invoice.getClosingBalance();
-        if (available.compareTo(closing) < 0) {
-            throw new IllegalStateException("Payment amount is less than invoice due");
-        }
     }
 
     private void applyPaymentToUnitBalance(String tenantId, Invoice targetInvoice, BigDecimal amount) {
@@ -151,9 +134,6 @@ public class PaymentService {
             }
             BigDecimal closing = target.getClosingBalance() == null ? BigDecimal.ZERO : target.getClosingBalance();
             if (remaining.compareTo(closing) < 0) {
-                if (target.getId() != null && target.getId().equals(targetInvoice.getId())) {
-                    throw new IllegalStateException("Payment amount is less than invoice due");
-                }
                 break;
             }
             BigDecimal prior = target.getPaymentsInPeriod() == null ? BigDecimal.ZERO : target.getPaymentsInPeriod();

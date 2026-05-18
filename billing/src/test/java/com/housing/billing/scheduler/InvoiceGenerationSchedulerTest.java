@@ -2,8 +2,8 @@ package com.housing.billing.scheduler;
 
 import com.housing.billing.messaging.InvoiceFlowEventPublisher;
 import com.housing.billing.model.Tenant;
-import com.housing.billing.repository.InvoiceRepository;
 import com.housing.billing.repository.TenantRepository;
+import com.housing.billing.service.AsyncInvoiceGenerationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -11,16 +11,16 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class InvoiceGenerationSchedulerTest {
@@ -29,10 +29,10 @@ class InvoiceGenerationSchedulerTest {
 	private TenantRepository tenantRepository;
 
 	@Mock
-	private InvoiceRepository invoiceRepository;
+	private InvoiceFlowEventPublisher invoiceFlowEventPublisher;
 
 	@Mock
-	private InvoiceFlowEventPublisher invoiceFlowEventPublisher;
+	private AsyncInvoiceGenerationService asyncInvoiceGenerationService;
 
 	@InjectMocks
 	private InvoiceGenerationScheduler scheduler;
@@ -47,7 +47,6 @@ class InvoiceGenerationSchedulerTest {
 		Tenant futureTenant = tenant("tenant::2", today.plusDays(1));
 
 		when(tenantRepository.findAllTenants()).thenReturn(List.of(dueTenant, futureTenant));
-		when(invoiceRepository.findAnyByTenantIdAndYearAndMonth(anyString(), anyInt(), anyInt())).thenReturn(List.of());
 
 		scheduler.scheduleTenantInvoices();
 
@@ -62,7 +61,6 @@ class InvoiceGenerationSchedulerTest {
 		LocalDate today = LocalDate.now();
 		Tenant dueTenant = tenant("tenant::1", today);
 		when(tenantRepository.findAllTenants()).thenReturn(List.of(dueTenant));
-		when(invoiceRepository.findAnyByTenantIdAndYearAndMonth(anyString(), anyInt(), anyInt())).thenReturn(List.of());
 
 		scheduler.scheduleTenantInvoices();
 		scheduler.scheduleTenantInvoices();
@@ -77,7 +75,6 @@ class InvoiceGenerationSchedulerTest {
 
 		LocalDate today = LocalDate.now();
 		when(tenantRepository.findAllTenants()).thenReturn(List.of(tenant("tenant::1", today)));
-		when(invoiceRepository.findAnyByTenantIdAndYearAndMonth(anyString(), anyInt(), anyInt())).thenReturn(List.of());
 
 		scheduler.scheduleTenantInvoices();
 
@@ -92,7 +89,6 @@ class InvoiceGenerationSchedulerTest {
 		LocalDate today = LocalDate.now();
 		Tenant monthlyTenant = tenant("tenant::1", LocalDate.of(2020, 1, today.getDayOfMonth()));
 		when(tenantRepository.findAllTenants()).thenReturn(List.of(monthlyTenant));
-		when(invoiceRepository.findAnyByTenantIdAndYearAndMonth(anyString(), anyInt(), anyInt())).thenReturn(List.of());
 
 		scheduler.scheduleTenantInvoices();
 
@@ -100,45 +96,35 @@ class InvoiceGenerationSchedulerTest {
 	}
 
 	@Test
-	void scheduleTenantInvoices_whenKafkaDisabled_skipsPublishing() {
+	void scheduleTenantInvoices_whenKafkaDisabled_dispatchesInProcess() {
 		ReflectionTestUtils.setField(scheduler, "tenantTimezone", "UTC");
 		ReflectionTestUtils.setField(scheduler, "kafkaEnabled", false);
 
+		LocalDate today = LocalDate.now();
+		when(tenantRepository.findAllTenants()).thenReturn(List.of(tenant("tenant::1", today)));
+
 		scheduler.scheduleTenantInvoices();
 
+		verify(asyncInvoiceGenerationService, times(1))
+				.scheduleTenantInvoiceGeneration(org.mockito.ArgumentMatchers.anyString(),
+						org.mockito.ArgumentMatchers.any(LocalDate.class),
+						org.mockito.ArgumentMatchers.eq(Duration.ZERO),
+						org.mockito.ArgumentMatchers.anyString());
 		verify(invoiceFlowEventPublisher, never()).publishTenantInvoiceDue(org.mockito.ArgumentMatchers.any());
-		verify(tenantRepository, never()).findAllTenants();
 	}
 
 	@Test
-	void scheduleTenantInvoices_whenPastDueAndCurrentCycleMissing_publishesDueEvent() {
+	void scheduleTenantInvoices_whenPastDue_publishesDueEvent() {
 		ReflectionTestUtils.setField(scheduler, "tenantTimezone", "UTC");
 		ReflectionTestUtils.setField(scheduler, "kafkaEnabled", true);
 
 		LocalDate today = LocalDate.now();
 		Tenant pastDueTenant = tenant("tenant::1", today.minusDays(2));
 		when(tenantRepository.findAllTenants()).thenReturn(List.of(pastDueTenant));
-		when(invoiceRepository.findAnyByTenantIdAndYearAndMonth(anyString(), anyInt(), anyInt())).thenReturn(List.of());
 
 		scheduler.scheduleTenantInvoices();
 
 		verify(invoiceFlowEventPublisher, times(1)).publishTenantInvoiceDue(org.mockito.ArgumentMatchers.any());
-	}
-
-	@Test
-	void scheduleTenantInvoices_whenCurrentCycleAlreadyGenerated_skipsPublishing() {
-		ReflectionTestUtils.setField(scheduler, "tenantTimezone", "UTC");
-		ReflectionTestUtils.setField(scheduler, "kafkaEnabled", true);
-
-		LocalDate today = LocalDate.now();
-		Tenant dueTenant = tenant("tenant::1", today);
-		when(tenantRepository.findAllTenants()).thenReturn(List.of(dueTenant));
-		when(invoiceRepository.findAnyByTenantIdAndYearAndMonth(anyString(), anyInt(), anyInt()))
-				.thenReturn(List.of(new com.housing.billing.model.Invoice()));
-
-		scheduler.scheduleTenantInvoices();
-
-		verify(invoiceFlowEventPublisher, never()).publishTenantInvoiceDue(org.mockito.ArgumentMatchers.any());
 	}
 
 	@Test
@@ -154,7 +140,7 @@ class InvoiceGenerationSchedulerTest {
 	}
 
 	@Test
-	void scheduleTenantInvoices_whenSingleTenantCheckFails_continuesWithOthers() {
+	void scheduleTenantInvoices_whenSingleTenantPublishFails_continuesWithOthers() {
 		ReflectionTestUtils.setField(scheduler, "tenantTimezone", "UTC");
 		ReflectionTestUtils.setField(scheduler, "kafkaEnabled", true);
 
@@ -162,14 +148,14 @@ class InvoiceGenerationSchedulerTest {
 		Tenant failingTenant = tenant("tenant::1", today);
 		Tenant healthyTenant = tenant("tenant::2", today);
 		when(tenantRepository.findAllTenants()).thenReturn(List.of(failingTenant, healthyTenant));
-		when(invoiceRepository.findAnyByTenantIdAndYearAndMonth("tenant::1", today.getYear(), today.getMonthValue()))
-				.thenThrow(new RuntimeException("query timeout"));
-		when(invoiceRepository.findAnyByTenantIdAndYearAndMonth("tenant::2", today.getYear(), today.getMonthValue()))
-				.thenReturn(List.of());
+		doThrow(new RuntimeException("publish failed"))
+				.doNothing()
+				.when(invoiceFlowEventPublisher)
+				.publishTenantInvoiceDue(org.mockito.ArgumentMatchers.any());
 
 		assertDoesNotThrow(() -> scheduler.scheduleTenantInvoices());
 
-		verify(invoiceFlowEventPublisher, times(1)).publishTenantInvoiceDue(org.mockito.ArgumentMatchers.any());
+		verify(invoiceFlowEventPublisher, times(2)).publishTenantInvoiceDue(org.mockito.ArgumentMatchers.any());
 	}
 
 	private Tenant tenant(String id, LocalDate invoiceDate) {
@@ -179,4 +165,3 @@ class InvoiceGenerationSchedulerTest {
 		return tenant;
 	}
 }
-
