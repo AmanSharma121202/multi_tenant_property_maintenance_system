@@ -51,27 +51,27 @@ class PaymentAllocationServiceTest {
         Unit unit = new Unit();
         unit.setId("unit::1");
         unit.setTenantId("tenant::1");
+        unit.setOwnerId("owner::1");
         unit.setUnitBalance(BigDecimal.ZERO);
 
         when(paymentRepository.findById(anyString())).thenReturn(Optional.empty());
-        when(invoiceService.get("tenant::1", "INV-unit::1-202605")).thenReturn(targetInvoice);
         when(invoiceRepository.findByTenantIdAndUnitId("tenant::1", "unit::1"))
                 .thenReturn(List.of(targetInvoice, olderDue));
         when(unitRepository.findById("unit::1")).thenReturn(Optional.of(unit));
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         RecordPaymentRequest req = new RecordPaymentRequest();
-        req.setInvoiceId("INV-unit::1-202605");
+        req.setUnitId("unit::1");
         req.setMethod("UPI");
         req.setAmount(new BigDecimal("120"));
 
         Payment saved = paymentService.record("tenant::1", req, "idempotent-key");
 
         assertEquals(new BigDecimal("120"), saved.getAmount());
-        assertEquals(new BigDecimal("20"), unit.getUnitBalance());
-        verify(invoiceRepository, times(1)).save(targetInvoice);
-        verify(invoiceRepository, times(0)).save(olderDue);
-        verify(invoiceService, times(1)).recalculate("tenant::1", "INV-unit::1-202605");
+        assertEquals(new BigDecimal("40"), unit.getUnitBalance());
+        verify(invoiceRepository, times(0)).save(targetInvoice);
+        verify(invoiceRepository, times(1)).save(olderDue);
+        verify(invoiceService, times(1)).recalculate("tenant::1", "INV-unit::1-202604");
         verify(unitRepository, times(1)).save(unit);
     }
 
@@ -81,17 +81,17 @@ class PaymentAllocationServiceTest {
         Unit unit = new Unit();
         unit.setId("unit::1");
         unit.setTenantId("tenant::1");
+        unit.setOwnerId("owner::1");
         unit.setUnitBalance(BigDecimal.ZERO);
 
         when(paymentRepository.findById(anyString())).thenReturn(Optional.empty());
-        when(invoiceService.get("tenant::1", "INV-unit::1-202605")).thenReturn(targetInvoice);
         when(invoiceRepository.findByTenantIdAndUnitId("tenant::1", "unit::1"))
                 .thenReturn(List.of(targetInvoice));
         when(unitRepository.findById("unit::1")).thenReturn(Optional.of(unit));
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         RecordPaymentRequest req = new RecordPaymentRequest();
-        req.setInvoiceId("INV-unit::1-202605");
+        req.setUnitId("unit::1");
         req.setMethod("UPI");
         req.setAmount(new BigDecimal("60"));
 

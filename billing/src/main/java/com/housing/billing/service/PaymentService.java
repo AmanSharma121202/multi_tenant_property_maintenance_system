@@ -46,12 +46,12 @@ public class PaymentService {
     );
 
     public Payment record(String tenantId, RecordPaymentRequest req, String idempotencyKey) {
-        // 1) Build a tenant + invoice scoped idempotency key
+        // 1) Build a tenant + unit scoped idempotency key
         String safeKey = (idempotencyKey != null && !idempotencyKey.isBlank())
                 ? idempotencyKey.trim()
                 : UUID.randomUUID().toString();
 
-        String paymentId = "payment::" + tenantId + "::" + req.getInvoiceId() + "::" + safeKey;
+        String paymentId = "payment::" + tenantId + "::" + req.getUnitId() + "::" + safeKey;
 
         // 2) If a payment with this ID already exists, return it (idempotent behavior)
         var existing = paymentRepository.findById(paymentId);
@@ -59,18 +59,17 @@ public class PaymentService {
             return existing.get();
         }
 
-        Invoice invoice = invoiceService.get(tenantId, req.getInvoiceId());
-        if (invoice.getOwnerId() == null || invoice.getOwnerId().isBlank()) {
-            throw new IllegalStateException("Cannot record payment: invoice is not linked to an owner");
+        Unit unit = loadUnitForPayment(tenantId, req.getUnitId());
+        if (unit.getOwnerId() == null || unit.getOwnerId().isBlank()) {
+            throw new IllegalStateException("Cannot record payment: unit is not linked to an owner");
         }
 
         // 3) Create & save new payment
         Payment payment = new Payment();
         payment.setId(paymentId);
         payment.setTenantId(tenantId);
-        payment.setInvoiceId(req.getInvoiceId());
-        payment.setUnitId(invoice.getUnitId());
-        payment.setOwnerId(invoice.getOwnerId());
+        payment.setUnitId(req.getUnitId());
+        payment.setOwnerId(unit.getOwnerId());
         payment.setMethod(req.getMethod());
         payment.setAmount(req.getAmount());
         payment.setTxnRef(req.getTxnRef());
@@ -83,19 +82,18 @@ public class PaymentService {
 
         Payment saved = paymentRepository.save(payment);
 
-        applyPaymentToUnitBalance(tenantId, invoice, req.getAmount());
+        applyPaymentToUnitBalance(tenantId, unit, req.getAmount());
 
         return saved;
     }
 
-    private void applyPaymentToUnitBalance(String tenantId, Invoice targetInvoice, BigDecimal amount) {
+    private void applyPaymentToUnitBalance(String tenantId, Unit unit, BigDecimal amount) {
         if (amount.signum() <= 0) {
             return;
         }
-        Unit unit = loadUnitForPayment(tenantId, targetInvoice.getUnitId());
         BigDecimal current = unit.getUnitBalance() == null ? BigDecimal.ZERO : unit.getUnitBalance();
         BigDecimal available = current.add(amount);
-        BigDecimal remaining = settleOutstandingInvoices(tenantId, targetInvoice, available);
+        BigDecimal remaining = settleOutstandingInvoices(tenantId, unit.getId(), available);
         unit.setTotalBalance(available);
         unit.setUnitBalance(remaining);
         unit.setUpdatedAt(Instant.now());
@@ -112,20 +110,10 @@ public class PaymentService {
         return unit;
     }
 
-    private BigDecimal settleOutstandingInvoices(String tenantId, Invoice targetInvoice, BigDecimal available) {
+    private BigDecimal settleOutstandingInvoices(String tenantId, String unitId, BigDecimal available) {
         BigDecimal remaining = available;
-        List<Invoice> outstanding = resolveOutstandingInvoices(tenantId, targetInvoice.getUnitId());
-        List<Invoice> ordered = new ArrayList<>();
-        if (isPayable(targetInvoice)) {
-            ordered.add(targetInvoice);
-        }
-        for (Invoice candidate : outstanding) {
-            if (candidate.getId() != null && candidate.getId().equals(targetInvoice.getId())) {
-                continue;
-            }
-            ordered.add(candidate);
-        }
-        for (Invoice target : ordered) {
+        List<Invoice> outstanding = resolveOutstandingInvoices(tenantId, unitId);
+        for (Invoice target : outstanding) {
             if (remaining.signum() <= 0) {
                 break;
             }

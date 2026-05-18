@@ -11,11 +11,11 @@ import java.math.BigDecimal;
 
 @Data
 public class RecordPaymentRequest {
-    @Schema(example = "INV-unit::123-202604")
-    @NotBlank(message = "invoiceId is required")
-    @Pattern(regexp = "^INV-.+", message = "invoiceId must start with INV-")
-    private String invoiceId;
-    
+    @Schema(example = "unit::123")
+    @NotBlank(message = "unitId is required")
+    @Pattern(regexp = "^unit::.+$", message = "unitId must start with unit::")
+    private String unitId;
+
     @Schema(example = "UPI")
     @NotBlank(message = "method is required")
     @Pattern(regexp = "^(CASH|BANK_TRANSFER|UPI|CHEQUE)$",

@@ -43,7 +43,7 @@ class PaymentServiceIdempotencyTest {
 
     @Test
     void update_updatesOnlyMetadataFields_andNeverRecomputesInvoice() {
-        Payment existingPayment = payment("payment::1", "tenant::1", "INV-unit::101-202604", "unit::101", "owner::1", new BigDecimal("100"));
+        Payment existingPayment = payment("payment::1", "tenant::1", "unit::101", "owner::1", new BigDecimal("100"));
         when(paymentRepository.findById("payment::1")).thenReturn(Optional.of(existingPayment));
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -65,7 +65,6 @@ class PaymentServiceIdempotencyTest {
         Payment updated = service.update("tenant::1", "payment::1", req);
 
         assertEquals(new BigDecimal("100"), updated.getAmount());
-        assertEquals("INV-unit::101-202604", updated.getInvoiceId());
         assertEquals("unit::101", updated.getUnitId());
         assertEquals("owner::1", updated.getOwnerId());
         assertEquals("UPI", updated.getMethod());
@@ -80,11 +79,10 @@ class PaymentServiceIdempotencyTest {
         verify(paymentRepository, times(1)).save(any(Payment.class));
     }
 
-    private Payment payment(String id, String tenantId, String invoiceId, String unitId, String ownerId, BigDecimal amount) {
+    private Payment payment(String id, String tenantId, String unitId, String ownerId, BigDecimal amount) {
         Payment payment = new Payment();
         payment.setId(id);
         payment.setTenantId(tenantId);
-        payment.setInvoiceId(invoiceId);
         payment.setUnitId(unitId);
         payment.setOwnerId(ownerId);
         payment.setAmount(amount);

@@ -25,9 +25,6 @@ public class Payment extends BaseDocument {
     @Id
     private String     id;
 
-    @NotBlank(message = "Invoice ID is required")
-    @Pattern(regexp = "^INV-.+", message = "Invalid invoiceId format")
-    private String     invoiceId;
     @NotBlank(message = "Unit ID is required")
     @Pattern(regexp = "^unit::.+$", message = "Invalid unitId format")
     private String     unitId;

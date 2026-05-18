@@ -73,7 +73,7 @@ class StrictRequestValidationTest {
     @Test
     void recordPaymentRequest_rejectsInvalidResourceIds() {
         RecordPaymentRequest req = new RecordPaymentRequest();
-        req.setInvoiceId("invoice-1");
+        req.setUnitId("unit-1");
         req.setMethod("UPI");
         req.setAmount(BigDecimal.valueOf(1200));
 
@@ -83,7 +83,7 @@ class StrictRequestValidationTest {
     @Test
     void recordPaymentRequest_rejectsBlankPaidByWhenProvided() {
         RecordPaymentRequest req = new RecordPaymentRequest();
-        req.setInvoiceId("INV-unit::123-202604");
+        req.setUnitId("unit::123");
         req.setMethod("UPI");
         req.setAmount(BigDecimal.valueOf(1200));
         req.setPaidBy("   ");
@@ -94,7 +94,7 @@ class StrictRequestValidationTest {
     @Test
     void recordPaymentRequest_acceptsValidPaidBy() {
         RecordPaymentRequest req = new RecordPaymentRequest();
-        req.setInvoiceId("INV-unit::123-202604");
+        req.setUnitId("unit::123");
         req.setMethod("UPI");
         req.setAmount(BigDecimal.valueOf(1200));
         req.setPaidBy("Amit Sharma");
@@ -166,4 +166,3 @@ class StrictRequestValidationTest {
         assertTrue(validator.validate(req).isEmpty());
     }
 }
-
