@@ -48,18 +48,19 @@ public class InvoiceFlowEventsListener {
 
         Duration delay = Duration.ofSeconds(Math.max(0L, event.getDelaySeconds()));
 
-        log.info("Dispatching tenant invoice event for async generation: eventId={} tenantId={} billingDate={} delaySeconds={} topic={} partition={} offset={}",
-                event.getEventId(), event.getTenantId(), event.getBillingDate(), event.getDelaySeconds(),
+        log.info("Dispatching tenant invoice event for async generation: eventId={} tenantId={} unitId={} billingDate={} delaySeconds={} topic={} partition={} offset={}",
+                event.getEventId(), event.getTenantId(), event.getUnitId(), event.getBillingDate(), event.getDelaySeconds(),
                 record.topic(), record.partition(), record.offset());
 
         asyncInvoiceGenerationService.scheduleTenantInvoiceGeneration(
                 event.getTenantId(),
                 event.getBillingDate(),
                 delay,
-                event.getEventId()
+                event.getEventId(),
+                event.getUnitId()
         );
-        log.info("Consumed tenant invoice due event: eventId={} tenantId={} billingDate={} delaySeconds={} topic={} partition={} offset={}",
-                event.getEventId(), event.getTenantId(), event.getBillingDate(), event.getDelaySeconds(),
+        log.info("Consumed tenant invoice due event: eventId={} tenantId={} unitId={} billingDate={} delaySeconds={} topic={} partition={} offset={}",
+                event.getEventId(), event.getTenantId(), event.getUnitId(), event.getBillingDate(), event.getDelaySeconds(),
                 record.topic(), record.partition(), record.offset());
     }
 

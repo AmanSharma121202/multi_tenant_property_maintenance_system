@@ -10,6 +10,10 @@ import org.springframework.data.couchbase.core.mapping.Document;
 import org.springframework.data.couchbase.repository.Collection;
 import org.springframework.data.couchbase.repository.Scope;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import io.swagger.v3.oas.annotations.media.Schema;
+import org.springframework.data.annotation.Transient;
+
 import java.math.BigDecimal;
 
 @Document
@@ -34,5 +38,9 @@ public class Unit extends BaseDocument {
 
     private BigDecimal dueAmount;
     private BigDecimal unitBalance;
+
+    @Transient
+    @JsonIgnore
+    @Schema(hidden = true)
     private BigDecimal totalBalance;
 }

@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 @Data
@@ -20,5 +21,8 @@ public class GenerateTenantInvoicesRequest {
     @Min(value = 1, message = "month must be between 1 and 12")
     @Max(value = 12, message = "month must be between 1 and 12")
     private Integer month;
-}
 
+    @Schema(example = "unit::123")
+    @Pattern(regexp = "^unit::.+$", message = "unitId must match unit::...")
+    private String unitId;
+}

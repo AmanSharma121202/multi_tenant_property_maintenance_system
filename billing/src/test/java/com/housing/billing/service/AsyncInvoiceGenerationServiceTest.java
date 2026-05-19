@@ -12,6 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -100,6 +101,27 @@ class AsyncInvoiceGenerationServiceTest {
         service.scheduleTenantInvoiceGeneration("tenant::1", LocalDate.of(2026, 4, 20), Duration.ZERO);
 
         verify(invoiceService, never()).generate(eq("tenant::1"), any(GenerateInvoiceRequest.class));
+    }
+
+    @Test
+    void scheduleTenantInvoiceGeneration_generatesInvoiceForSpecificUnit() {
+        Unit u1 = unit("unit::101");
+        u1.setTenantId("tenant::1");
+        when(unitRepository.findById("unit::101")).thenReturn(Optional.of(u1));
+        when(invoiceRepository.findAnyByTenantIdAndUnitIdAndYearAndMonth("tenant::1", "unit::101", 2026, 4))
+                .thenReturn(List.of());
+
+        AsyncInvoiceGenerationService service = new AsyncInvoiceGenerationService(
+                unitRepository,
+                invoiceService,
+                invoiceRepository,
+                Runnable::run
+        );
+
+        service.scheduleTenantInvoiceGeneration("tenant::1", LocalDate.of(2026, 4, 20), Duration.ZERO, "flow-1", "unit::101");
+
+        verify(invoiceService, org.mockito.Mockito.timeout(1000).times(1))
+                .generate(eq("tenant::1"), any(GenerateInvoiceRequest.class));
     }
 
     private Unit unit(String id) {

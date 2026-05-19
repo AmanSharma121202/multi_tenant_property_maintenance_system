@@ -42,12 +42,15 @@ class InvoiceControllerTest {
         GenerateTenantInvoicesRequest request = new GenerateTenantInvoicesRequest();
         request.setYear(2026);
         request.setMonth(5);
+        request.setUnitId("unit::101");
 
         ResponseEntity<Map<String, String>> response = invoiceController.generateTenantInvoices("tenant::1", request);
 
         assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
+        assertEquals("unit::101", response.getBody().get("unitId"));
         verify(invoiceFlowEventPublisher).publishTenantInvoiceDue(argThat(event ->
                 "tenant::1".equals(event.getTenantId())
+                        && "unit::101".equals(event.getUnitId())
                         && LocalDate.of(2026, 5, 1).equals(event.getBillingDate())
                         && event.getDelaySeconds() == 0L
                         && event.getEventId() != null

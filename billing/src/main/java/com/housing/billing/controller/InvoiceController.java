@@ -72,18 +72,23 @@ public class InvoiceController {
         TenantInvoiceDueEvent event = TenantInvoiceDueEvent.builder()
                 .eventId(flowId)
                 .tenantId(tenantId)
+                .unitId(request.getUnitId())
                 .billingDate(invoiceDate)
                 .delaySeconds(0L)
                 .occurredAt(Instant.now())
                 .build();
         invoiceFlowEventPublisher.publishTenantInvoiceDue(event);
 
-        return ResponseEntity.accepted().body(Map.of(
-                "message", "Tenant invoice generation event published",
-                "tenantId", tenantId,
-                "year", String.valueOf(request.getYear()),
-                "month", String.valueOf(request.getMonth()),
-                "flowId", flowId
-        ));
+        Map<String, String> response = new java.util.HashMap<>();
+        response.put("message", "Tenant invoice generation event published");
+        response.put("tenantId", tenantId);
+        response.put("year", String.valueOf(request.getYear()));
+        response.put("month", String.valueOf(request.getMonth()));
+        response.put("flowId", flowId);
+        if (request.getUnitId() != null && !request.getUnitId().isBlank()) {
+            response.put("unitId", request.getUnitId());
+        }
+
+        return ResponseEntity.accepted().body(response);
     }
 }

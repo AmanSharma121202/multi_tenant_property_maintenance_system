@@ -15,8 +15,8 @@ import java.time.LocalDate;
 public class TenantInvoiceDueEvent {
     private String eventId;
     private String tenantId;
+    private String unitId;
     private LocalDate billingDate;
     private long delaySeconds;
     private Instant occurredAt;
 }
-

@@ -20,17 +20,17 @@ public class InvoiceFlowEventPublisher {
     private String ownerUnitLinkedTopic;
 
     public void publishTenantInvoiceDue(TenantInvoiceDueEvent event) {
-        log.info("Publishing tenant invoice due event: eventId={} tenantId={} billingDate={} topic={} key={}",
-                event.getEventId(), event.getTenantId(), event.getBillingDate(), tenantInvoiceDueTopic, event.getTenantId());
+        log.info("Publishing tenant invoice due event: eventId={} tenantId={} unitId={} billingDate={} topic={} key={}",
+                event.getEventId(), event.getTenantId(), event.getUnitId(), event.getBillingDate(), tenantInvoiceDueTopic, event.getTenantId());
 
         kafkaTemplate.send(tenantInvoiceDueTopic, event.getTenantId(), event)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
-                        log.error("Failed to publish tenant invoice due event: eventId={} tenantId={} billingDate={} topic={} reason={}",
-                                event.getEventId(), event.getTenantId(), event.getBillingDate(), tenantInvoiceDueTopic, ex.getMessage());
+                        log.error("Failed to publish tenant invoice due event: eventId={} tenantId={} unitId={} billingDate={} topic={} reason={}",
+                                event.getEventId(), event.getTenantId(), event.getUnitId(), event.getBillingDate(), tenantInvoiceDueTopic, ex.getMessage());
                     } else {
-                        log.info("Published tenant invoice due event: eventId={} tenantId={} billingDate={} topic={} partition={} offset={}",
-                                event.getEventId(), event.getTenantId(), event.getBillingDate(),
+                        log.info("Published tenant invoice due event: eventId={} tenantId={} unitId={} billingDate={} topic={} partition={} offset={}",
+                                event.getEventId(), event.getTenantId(), event.getUnitId(), event.getBillingDate(),
                                 result.getRecordMetadata().topic(), result.getRecordMetadata().partition(), result.getRecordMetadata().offset());
                     }
                 });
