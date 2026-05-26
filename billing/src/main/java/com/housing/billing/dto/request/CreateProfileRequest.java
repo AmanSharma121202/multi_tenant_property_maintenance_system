@@ -32,3 +32,5 @@ public class CreateProfileRequest {
     @Schema(example = "true")
     private boolean active = true;
 }
+
+

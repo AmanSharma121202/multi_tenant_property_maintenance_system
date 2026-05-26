@@ -20,7 +20,7 @@ public class KafkaConsumerConfig {
                 kafkaTemplate,
                 (record, ex) -> new TopicPartition(record.topic() + ".DLQ", record.partition())
         );
-        DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, new FixedBackOff(2000L, 2));
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, new FixedBackOff(0L, 0));
         errorHandler.addNotRetryableExceptions(DeserializationException.class);
         return errorHandler;
     }

@@ -46,8 +46,7 @@ class AsyncInvoiceGenerationServiceTest {
         AsyncInvoiceGenerationService service = new AsyncInvoiceGenerationService(
                 unitRepository,
                 invoiceService,
-                invoiceRepository,
-                Runnable::run
+                invoiceRepository
         );
 
         LocalDate invoiceDate = LocalDate.of(2026, 4, 20);
@@ -76,8 +75,7 @@ class AsyncInvoiceGenerationServiceTest {
         AsyncInvoiceGenerationService service = new AsyncInvoiceGenerationService(
                 unitRepository,
                 invoiceService,
-                invoiceRepository,
-                Runnable::run
+                invoiceRepository
         );
 
         service.scheduleTenantInvoiceGeneration("tenant::1", LocalDate.of(2026, 4, 20), Duration.ZERO);
@@ -94,8 +92,7 @@ class AsyncInvoiceGenerationServiceTest {
         AsyncInvoiceGenerationService service = new AsyncInvoiceGenerationService(
                 unitRepository,
                 invoiceService,
-                invoiceRepository,
-                Runnable::run
+                invoiceRepository
         );
 
         service.scheduleTenantInvoiceGeneration("tenant::1", LocalDate.of(2026, 4, 20), Duration.ZERO);
@@ -114,8 +111,7 @@ class AsyncInvoiceGenerationServiceTest {
         AsyncInvoiceGenerationService service = new AsyncInvoiceGenerationService(
                 unitRepository,
                 invoiceService,
-                invoiceRepository,
-                Runnable::run
+                invoiceRepository
         );
 
         service.scheduleTenantInvoiceGeneration("tenant::1", LocalDate.of(2026, 4, 20), Duration.ZERO, "flow-1", "unit::101");

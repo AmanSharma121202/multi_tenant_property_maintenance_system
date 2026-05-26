@@ -4,7 +4,6 @@ import com.housing.billing.dto.request.GenerateInvoiceRequest;
 import com.housing.billing.model.Unit;
 import com.housing.billing.repository.InvoiceRepository;
 import com.housing.billing.repository.UnitRepository;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import lombok.extern.slf4j.Slf4j;
 
@@ -12,9 +11,6 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
@@ -23,16 +19,13 @@ public class AsyncInvoiceGenerationService {
     private final UnitRepository unitRepository;
     private final InvoiceService invoiceService;
     private final InvoiceRepository invoiceRepository;
-    private final Executor invoiceGenerationExecutor;
 
     public AsyncInvoiceGenerationService(UnitRepository unitRepository,
                                          InvoiceService invoiceService,
-                                         InvoiceRepository invoiceRepository,
-                                         @Qualifier("invoiceGenerationExecutor") Executor invoiceGenerationExecutor) {
+                                         InvoiceRepository invoiceRepository) {
         this.unitRepository = unitRepository;
         this.invoiceService = invoiceService;
         this.invoiceRepository = invoiceRepository;
-        this.invoiceGenerationExecutor = invoiceGenerationExecutor;
     }
 
     public void scheduleTenantInvoiceGeneration(String tenantId, LocalDate invoiceDate, Duration delay) {
@@ -46,17 +39,21 @@ public class AsyncInvoiceGenerationService {
     public void scheduleTenantInvoiceGeneration(String tenantId, LocalDate invoiceDate, Duration delay, String flowId, String unitId) {
         String safeFlowId = (flowId == null || flowId.isBlank()) ? "n/a" : flowId;
         String safeUnitId = (unitId == null || unitId.isBlank()) ? null : unitId;
-        log.info("Scheduling tenant invoice generation task: flowId={} tenant={} unitId={} billingDate={} delayMs={}",
-                safeFlowId, tenantId, safeUnitId, invoiceDate, delay.toMillis());
+        long delayMs = (delay == null) ? 0L : Math.max(0L, delay.toMillis());
+        if (delayMs > 0L) {
+            log.info("Kafka delay already handled; executing immediately: flowId={} tenant={} unitId={} billingDate={} originalDelayMs={}",
+                    safeFlowId, tenantId, safeUnitId, invoiceDate, delayMs);
+        } else {
+            log.info("Dispatching tenant invoice generation immediately: flowId={} tenant={} unitId={} billingDate={}",
+                    safeFlowId, tenantId, safeUnitId, invoiceDate);
+        }
 
-        CompletableFuture.runAsync(
-                () -> generateForTenantUnits(tenantId, invoiceDate, safeFlowId, safeUnitId),
-                CompletableFuture.delayedExecutor(delay.toMillis(), TimeUnit.MILLISECONDS, invoiceGenerationExecutor)
-        ).exceptionally(ex -> {
+        try {
+            generateForTenantUnits(tenantId, invoiceDate, safeFlowId, safeUnitId);
+        } catch (Exception ex) {
             log.error("Tenant invoice generation task crashed: flowId={} tenant={} unitId={} billingDate={} reason={}",
                     safeFlowId, tenantId, safeUnitId, invoiceDate, rootMessage(ex));
-            return null;
-        });
+        }
     }
 
     private void generateForTenantUnits(String tenantId, LocalDate invoiceDate) {

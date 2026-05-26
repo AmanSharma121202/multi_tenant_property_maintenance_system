@@ -46,6 +46,9 @@ app:
       tenant-timezone: "UTC"
   kafka:
     enabled: true
+    delay:
+      fixed-delay-ms: 60000
+      max-attempts: 20
     topics:
       tenant-invoice-due: billing.tenant.invoice.due.v1
       owner-unit-linked: billing.owner.unit.linked.v1
@@ -70,4 +73,3 @@ com:
         validLateFeeType: [PERCENTAGE, FIXED, NONE]
         validProfileCode: [1BHK, 2BHK, 3BHK, VILLA]
         validCode: [1BHK, 2BHK, 3BHK, VILLA]
-

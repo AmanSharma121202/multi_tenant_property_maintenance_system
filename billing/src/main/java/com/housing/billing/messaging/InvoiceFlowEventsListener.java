@@ -46,16 +46,15 @@ public class InvoiceFlowEventsListener {
             throw ex;
         }
 
-        Duration delay = Duration.ofSeconds(Math.max(0L, event.getDelaySeconds()));
 
-        log.info("Dispatching tenant invoice event for async generation: eventId={} tenantId={} unitId={} billingDate={} delaySeconds={} topic={} partition={} offset={}",
+        log.info("Dispatching tenant invoice event for generation: eventId={} tenantId={} unitId={} billingDate={} delaySeconds={} topic={} partition={} offset={}",
                 event.getEventId(), event.getTenantId(), event.getUnitId(), event.getBillingDate(), event.getDelaySeconds(),
                 record.topic(), record.partition(), record.offset());
 
         asyncInvoiceGenerationService.scheduleTenantInvoiceGeneration(
                 event.getTenantId(),
                 event.getBillingDate(),
-                delay,
+                Duration.ZERO,
                 event.getEventId(),
                 event.getUnitId()
         );
