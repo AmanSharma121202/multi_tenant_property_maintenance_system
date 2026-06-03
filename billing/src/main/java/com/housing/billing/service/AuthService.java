@@ -21,7 +21,7 @@ public class AuthService {
     private final AuthMapper authMapper;
     private final ModelValidationService modelValidationService;
 
-    public UserResponse signup(SignupRequest req) {
+    public SignupResponse signup(SignupRequest req) {
         String normalizedEmail = req.getEmail().trim();
         userRepository.findByEmail(normalizedEmail).ifPresent(u -> {
             throw new IllegalStateException("Email already registered");
@@ -30,21 +30,31 @@ public class AuthService {
         User user = authMapper.toNewUser(req, passwordEncoder.encode(req.getPassword()));
         modelValidationService.validate(user);
 
-        return authMapper.toUserResponse(userRepository.save(user));
+        User saved = userRepository.save(user);
+        return new SignupResponse(
+                authMapper.toUserResponse(saved),
+                issueToken(saved),
+                "Bearer",
+                86400000L);
     }
 
     public TokenResponse login(LoginRequest req) {
-        User user = userRepository.findByEmail(req.getEmail().trim())
+        User user = authenticate(req.getEmail().trim(), req.getPassword());
+        return new TokenResponse(issueToken(user), "Bearer", 86400000L);
+    }
+
+    private User authenticate(String email, String rawPassword) {
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new AuthenticationFailedException("Invalid credentials"));
 
-        if (!passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
+        if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
             throw new AuthenticationFailedException("Invalid credentials");
         }
+        return user;
+    }
 
-        String token = jwtUtil.generateToken(
-                user.getEmail(), user.getTenantId(), user.getRoles());
-
-        return new TokenResponse(token, "Bearer", 86400000L);
+    private String issueToken(User user) {
+        return jwtUtil.generateToken(user.getEmail(), user.getTenantId(), user.getRoles());
     }
 
     public UserResponse getMe(String email) {

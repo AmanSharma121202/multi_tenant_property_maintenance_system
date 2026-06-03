@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -60,9 +61,15 @@ public class OwnerService {
 
     public Owner create(String tenantId, CreateOwnerRequest req) {
         String normalizedEmail = req.getEmail().trim();
-        ownerRepository.findByTenantIdAndEmailIgnoreCase(tenantId, normalizedEmail).ifPresent(existing -> {
-            throw new IllegalStateException("Owner already exists");
-        });
+
+        Optional<Owner> existing = ownerRepository.findByTenantIdAndEmailIgnoreCase(tenantId, normalizedEmail);
+        if (existing.isPresent()) {
+            Owner owner = existing.get();
+            if ("ACTIVE".equalsIgnoreCase(owner.getStatus())) {
+                throw new IllegalStateException("Owner already exists");
+            }
+            return reactivateOwner(tenantId, owner, req);
+        }
 
         Owner owner = new Owner();
         owner.setId("owner::" + UUID.randomUUID());
@@ -98,6 +105,67 @@ public class OwnerService {
         owner.setUpdatedAt(Instant.now());
         modelValidationService.validate(owner);
         return ownerRepository.save(owner);
+    }
+
+    public void delete(String tenantId, String ownerId) {
+        validateOwnerId(ownerId);
+        Owner owner = get(tenantId, ownerId);
+
+        if ("INACTIVE".equalsIgnoreCase(owner.getStatus())) {
+            throw new IllegalStateException("Owner is already inactive");
+        }
+
+        detachOwnerFromUnits(tenantId, owner);
+        owner.setStatus("INACTIVE");
+        owner.setUpdatedAt(Instant.now());
+        modelValidationService.validate(owner);
+        ownerRepository.save(owner);
+    }
+
+    private Owner reactivateOwner(String tenantId, Owner owner, CreateOwnerRequest req) {
+        detachOwnerFromUnits(tenantId, owner);
+        owner.setName(req.getName().trim());
+        owner.setEmail(req.getEmail().trim());
+        owner.setPhone(req.getPhone() == null ? null : req.getPhone().trim());
+        owner.setStatus(req.getStatus() != null ? req.getStatus().trim() : "ACTIVE");
+        if (!"ACTIVE".equalsIgnoreCase(owner.getStatus())) {
+            owner.setStatus("ACTIVE");
+        }
+        if (owner.getUnitIds() == null) {
+            owner.setUnitIds(new ArrayList<>());
+        }
+        owner.setUpdatedAt(Instant.now());
+        modelValidationService.validate(owner);
+        return ownerRepository.save(owner);
+    }
+
+    private void detachOwnerFromUnits(String tenantId, Owner owner) {
+        String ownerId = owner.getId();
+        if (owner.getUnitIds() != null) {
+            for (String unitId : List.copyOf(owner.getUnitIds())) {
+                unlinkUnit(tenantId, ownerId, unitId);
+            }
+        }
+        unitRepository.findByTenantId(tenantId).stream()
+                .filter(unit -> ownerId.equals(unit.getOwnerId()))
+                .forEach(unit -> {
+                    unit.setOwnerId(null);
+                    unit.setUpdatedAt(Instant.now());
+                    modelValidationService.validate(unit);
+                    unitRepository.save(unit);
+                });
+        if (owner.getUnitIds() != null) {
+            owner.getUnitIds().clear();
+        }
+    }
+
+    private void validateOwnerId(String ownerId) {
+        if (ownerId == null || ownerId.isBlank()) {
+            throw new IllegalArgumentException("ownerId is required");
+        }
+        if (!ownerId.startsWith("owner::")) {
+            throw new IllegalArgumentException("Invalid ownerId format");
+        }
     }
 
     // Link a unit to this owner AND set ownerId on the unit document

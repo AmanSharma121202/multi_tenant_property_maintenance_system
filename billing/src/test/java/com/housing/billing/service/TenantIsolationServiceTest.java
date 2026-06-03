@@ -114,20 +114,38 @@ class TenantIsolationServiceTest {
     }
 
     @Test
-    void unitDeactivateThrowsForInvalidUnitIdFormat() {
-        assertThrows(IllegalArgumentException.class, () -> unitService.deactivate("tenant-a", "abc"));
-        verify(unitRepository, never()).save(org.mockito.ArgumentMatchers.any(Unit.class));
+    void unitDeleteThrowsForInvalidUnitIdFormat() {
+        assertThrows(IllegalArgumentException.class, () -> unitService.delete("tenant-a", "abc"));
+        verify(unitRepository, never()).delete(any());
     }
 
     @Test
-    void unitDeactivateThrowsWhenAlreadyInactive() {
+    void unitDeleteDeactivatesActiveUnit() {
+        Unit unit = new Unit();
+        unit.setId("unit::1");
+        unit.setTenantId("tenant-a");
+        unit.setActive(true);
+        unit.setType("unit");
+        when(unitRepository.findById("unit::1")).thenReturn(Optional.of(unit));
+        when(invoiceRepository.findByTenantIdAndUnitId("tenant-a", "unit::1")).thenReturn(List.of());
+        when(unitRepository.save(any(Unit.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        unitService.delete("tenant-a", "unit::1");
+
+        verify(unitRepository, org.mockito.Mockito.atLeastOnce()).save(
+                org.mockito.ArgumentMatchers.argThat(saved -> !saved.isActive()));
+        verify(unitRepository, never()).delete(any());
+    }
+
+    @Test
+    void unitDeleteThrowsWhenAlreadyInactive() {
         Unit unit = new Unit();
         unit.setId("unit::1");
         unit.setTenantId("tenant-a");
         unit.setActive(false);
         when(unitRepository.findById("unit::1")).thenReturn(Optional.of(unit));
 
-        assertThrows(IllegalStateException.class, () -> unitService.deactivate("tenant-a", "unit::1"));
+        assertThrows(IllegalStateException.class, () -> unitService.delete("tenant-a", "unit::1"));
     }
 
     @Test
@@ -148,20 +166,25 @@ class TenantIsolationServiceTest {
         when(unitRepository.findByTenantIdAndProfileCode("tenant-a", "1BHK")).thenReturn(List.of(activeUnit));
 
         assertThrows(IllegalStateException.class, () -> profileService.delete("tenant-a", "profile::1"));
-        verify(profileRepository, never()).save(org.mockito.ArgumentMatchers.any(Profile.class));
+        verify(profileRepository, never()).delete(any());
     }
 
     @Test
-    void profileDeleteThrowsWhenAlreadyInactive() {
+    void profileDeleteDeactivatesProfileWhenNoActiveUnitsUseCode() {
         Profile profile = new Profile();
         profile.setId("profile::1");
         profile.setTenantId("tenant-a");
         profile.setCode("1BHK");
-        profile.setActive(false);
+        profile.setActive(true);
+        profile.setType("profile");
         when(profileRepository.findById("profile::1")).thenReturn(Optional.of(profile));
+        when(unitRepository.findByTenantIdAndProfileCode("tenant-a", "1BHK")).thenReturn(List.of());
+        when(profileRepository.save(any(Profile.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        assertThrows(IllegalStateException.class, () -> profileService.delete("tenant-a", "profile::1"));
-        verify(profileRepository, never()).save(org.mockito.ArgumentMatchers.any(Profile.class));
+        profileService.delete("tenant-a", "profile::1");
+
+        verify(profileRepository).save(org.mockito.ArgumentMatchers.argThat(saved -> !saved.isActive()));
+        verify(profileRepository, never()).delete(any());
     }
 
     @Test
@@ -230,11 +253,13 @@ class TenantIsolationServiceTest {
 
         Profile existing = new Profile();
         existing.setId("profile::existing");
+        existing.setActive(true);
         when(profileRepository.findByTenantIdAndCode("tenant-a", "2BHK")).thenReturn(Optional.of(existing));
 
         IllegalStateException ex = assertThrows(IllegalStateException.class, () -> profileService.create("tenant-a", req));
         assertEquals("Profile already exists", ex.getMessage());
         verify(profileRepository, never()).save(any(Profile.class));
+        verify(profileRepository, never()).delete(any());
     }
 
     @Test
@@ -246,12 +271,14 @@ class TenantIsolationServiceTest {
 
         Owner existing = new Owner();
         existing.setId("owner::existing");
+        existing.setStatus("ACTIVE");
         when(ownerRepository.findByTenantIdAndEmailIgnoreCase("tenant-a", "amit.sharma@example.com"))
                 .thenReturn(Optional.of(existing));
 
         IllegalStateException ex = assertThrows(IllegalStateException.class, () -> ownerService.create("tenant-a", req));
         assertEquals("Owner already exists", ex.getMessage());
         verify(ownerRepository, never()).save(any(Owner.class));
+        verify(ownerRepository, never()).delete(any());
     }
 
     @Test
@@ -263,11 +290,16 @@ class TenantIsolationServiceTest {
 
         Unit existing = new Unit();
         existing.setId("unit::existing");
+        existing.setActive(true);
         when(unitRepository.findByTenantIdAndUnitNumberIgnoreCase("tenant-a", "A-101"))
                 .thenReturn(Optional.of(existing));
+        Profile profile = new Profile();
+        profile.setCode("2BHK");
+        when(profileRepository.findByTenantIdAndCode("tenant-a", "2BHK")).thenReturn(Optional.of(profile));
 
         IllegalStateException ex = assertThrows(IllegalStateException.class, () -> unitService.create("tenant-a", req));
         assertEquals("Unit already exists", ex.getMessage());
         verify(unitRepository, never()).save(any(Unit.class));
+        verify(unitRepository, never()).delete(any(Unit.class));
     }
 }

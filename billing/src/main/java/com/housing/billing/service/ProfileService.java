@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -52,9 +53,15 @@ public class ProfileService {
 
     public Profile create(String tenantId, CreateProfileRequest req) {
         String normalizedCode = req.getCode().trim();
-        profileRepository.findByTenantIdAndCode(tenantId, normalizedCode).ifPresent(existing -> {
-            throw new IllegalStateException("Profile already exists");
-        });
+
+        Optional<Profile> existing = profileRepository.findByTenantIdAndCode(tenantId, normalizedCode);
+        if (existing.isPresent()) {
+            Profile profile = existing.get();
+            if (profile.isActive()) {
+                throw new IllegalStateException("Profile already exists");
+            }
+            return reactivateProfile(profile, req);
+        }
 
         Profile profile = new Profile();
         profile.setId("profile::" + UUID.randomUUID());
@@ -124,7 +131,8 @@ public class ProfileService {
             throw new IllegalStateException("Profile is already inactive");
         }
 
-        boolean hasActiveUnitsUsingProfile = unitRepository.findByTenantIdAndProfileCode(tenantId, profile.getCode())
+        boolean hasActiveUnitsUsingProfile = unitRepository
+                .findByTenantIdAndProfileCode(tenantId, profile.getCode())
                 .stream()
                 .anyMatch(Unit::isActive);
         if (hasActiveUnitsUsingProfile) {
@@ -133,7 +141,17 @@ public class ProfileService {
 
         profile.setActive(false);
         profile.setUpdatedAt(Instant.now());
+        modelValidationService.validate(profile);
         profileRepository.save(profile);
+    }
+
+    private Profile reactivateProfile(Profile profile, CreateProfileRequest req) {
+        profile.setLabel(req.getLabel().trim());
+        profile.setMonthlyAmount(req.getMonthlyAmount());
+        profile.setActive(req.isActive());
+        profile.setUpdatedAt(Instant.now());
+        modelValidationService.validate(profile);
+        return profileRepository.save(profile);
     }
 
     private void validateDeleteRequest(String tenantId, String profileId) {

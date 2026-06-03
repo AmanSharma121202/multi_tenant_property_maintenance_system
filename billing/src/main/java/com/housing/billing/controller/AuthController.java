@@ -2,6 +2,7 @@ package com.housing.billing.controller;
 
 import com.housing.billing.dto.request.LoginRequest;
 import com.housing.billing.dto.request.SignupRequest;
+import com.housing.billing.dto.response.SignupResponse;
 import com.housing.billing.dto.response.TokenResponse;
 import com.housing.billing.dto.response.UserResponse;
 import com.housing.billing.model.User;
@@ -20,7 +21,7 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/signup")
-    public ResponseEntity<UserResponse> signup(@Valid @RequestBody SignupRequest req) {
+    public ResponseEntity<SignupResponse> signup(@Valid @RequestBody SignupRequest req) {
         return ResponseEntity.status(201).body(authService.signup(req));
     }
 

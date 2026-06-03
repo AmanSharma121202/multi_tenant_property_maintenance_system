@@ -1,15 +1,19 @@
 package com.housing.billing.security;
 
-import com.housing.billing.exception.TenantIsolationException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.HandlerMapping;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
+@Slf4j
 public class TenantGuard implements HandlerInterceptor {
 
     @Override
@@ -41,7 +45,8 @@ public class TenantGuard implements HandlerInterceptor {
             return true;
         }
 
-        String pathTenantId = pathVars.get("tenantId");
+        String pathTenantIdRaw = decodePathSegment(pathVars.get("tenantId"));
+        String pathTenantId = TenantIdNormalizer.normalize(pathTenantIdRaw);
 
         // Extract tenantId from JWT details
         if (!(auth.getDetails() instanceof TenantAuthDetails details)) {
@@ -49,13 +54,31 @@ public class TenantGuard implements HandlerInterceptor {
             return false;
         }
 
+        String tokenTenantIdRaw = details.getTenantId();
+        String tokenTenantId = TenantIdNormalizer.normalize(tokenTenantIdRaw);
 
-        String tokenTenantId = details.getTenantId();
+        log.info("Token tenantId: {}", tokenTenantId);
+        log.info("Request tenantId: {}", pathTenantId);
+        log.debug("TenantGuard tenant check: tokenTenantIdRaw={} requestTenantIdRaw={}",
+                tokenTenantIdRaw, pathTenantIdRaw);
 
         if (!pathTenantId.equals(tokenTenantId)) {
-            throw new TenantIsolationException("Tenant isolation violation");
+            // Use AccessDeniedException so the API consistently returns 403 FORBIDDEN.
+            throw new AccessDeniedException("Tenant isolation violation");
         }
 
         return true;
+    }
+
+    private static String decodePathSegment(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException ex) {
+            // Avoid 500s from malformed percent-encoding in path variables.
+            throw new IllegalArgumentException("Invalid tenantId encoding");
+        }
     }
 }

@@ -6,11 +6,8 @@ import com.housing.billing.security.RestAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,52 +16,37 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
-    private final RestAccessDeniedHandler restAccessDeniedHandler;
-    private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
+    private final RestAuthenticationEntryPoint authenticationEntryPoint;
+    private final RestAccessDeniedHandler accessDeniedHandler;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        return http
-                .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(csrf -> csrf.disable())
+                .cors(cors -> {
+                })
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex
-                        .accessDeniedHandler(restAccessDeniedHandler)
-                        .authenticationEntryPoint(restAuthenticationEntryPoint)
-                )
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(
+                                "/auth/**",
+                                "/actuator/health",
+                                "/v3/api-docs/**",
+                                "/api-docs",
+                                "/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
+                        ).permitAll()
+                        .anyRequest().authenticated())
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
-                        // ---------- Public ----------
-                        .requestMatchers("/auth/**").permitAll()
-                        .requestMatchers("/swagger-ui/**").permitAll()
-                        .requestMatchers("/swagger-ui.html").permitAll()
-                        .requestMatchers("/api-docs/**").permitAll()
-                        .requestMatchers("/v3/api-docs/**").permitAll()
-                        .requestMatchers("/actuator/health").permitAll()
-
-                        // ---------- SuperAdmin-only ----------
-                        // LIST-ALL tenants
-                        .requestMatchers(HttpMethod.GET, "/tenants").hasRole("SUPERADMIN")
-                        // Create tenant (SuperAdmin model). If you want anonymous bootstrap, see note below.
-                        .requestMatchers(HttpMethod.POST, "/tenants").hasRole("SUPERADMIN")
-
-                        // ---------- Tenant-scoped fetch ----------
-                        // Allow fetching a single tenant for SUPERADMIN or TENANT_ADMIN;
-                        // TenantGuard will enforce path tenant == token tenant (unless SUPERADMIN).
-                        .requestMatchers(HttpMethod.GET, "/tenants/*").hasAnyRole("SUPERADMIN", "TENANT_ADMIN")
-
-                        // ---------- Tenant update ----------
-                        .requestMatchers(HttpMethod.PATCH, "/tenants/*").hasRole("SUPERADMIN")
-
-                        // ---------- Everything else ----------
-                        .anyRequest().authenticated()
-                )
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                .build();
+        return http.build();
     }
 
     @Bean
@@ -72,3 +54,4 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 }
+

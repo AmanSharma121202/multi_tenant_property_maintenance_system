@@ -3,6 +3,7 @@ package com.housing.billing.controller;
 import com.housing.billing.dto.request.CreateTenantRequest;
 import com.housing.billing.dto.request.UpdateTenantRequest;
 import com.housing.billing.model.Tenant;
+import com.housing.billing.security.TenantIdNormalizer;
 import com.housing.billing.service.TenantService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,12 +30,14 @@ public class TenantController {
 
     @GetMapping("/{tenantId}")
     public ResponseEntity<Tenant> get(@PathVariable String tenantId) {
+        tenantId = TenantIdNormalizer.normalize(tenantId);
         return ResponseEntity.ok(tenantService.get(tenantId));
     }
 
     @PatchMapping("/{tenantId}")
     public ResponseEntity<Tenant> update(@PathVariable String tenantId,
                                          @Valid @RequestBody UpdateTenantRequest req) {
+        tenantId = TenantIdNormalizer.normalize(tenantId);
         return ResponseEntity.ok(tenantService.update(tenantId, req));
     }
 }

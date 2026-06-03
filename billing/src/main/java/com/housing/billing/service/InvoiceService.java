@@ -8,6 +8,7 @@ import java.time.ZoneOffset;
 import org.springframework.beans.factory.annotation.Value;
 
 import com.housing.billing.dto.request.GenerateInvoiceRequest;
+import com.housing.billing.exception.FilterValueNotFoundException;
 import com.housing.billing.exception.ResourceNotFoundException;
 import com.housing.billing.exception.TenantIsolationException;
 import com.housing.billing.exception.InvalidFilterSyntaxException;
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -44,7 +46,7 @@ public class InvoiceService {
     private final ModelValidationService modelValidationService;
 
     private static final Set<String> FILTERABLE_FIELDS = Set.of(
-            "year", "month", "status", "issueDate", "dueDate"
+            "year", "month", "status", "issueDate", "dueDate", "unitId"
     );
 
     private static final Map<String, String> FILTER_VALUE_NOT_FOUND_MESSAGES = Map.ofEntries(
@@ -52,13 +54,14 @@ public class InvoiceService {
             Map.entry("month", "Invoice not found for month '%s'"),
             Map.entry("status", "Invoice not found for status '%s'"),
             Map.entry("issueDate", "Invoice not found for issueDate '%s'"),
-            Map.entry("dueDate", "Invoice not found for dueDate '%s'")
+            Map.entry("dueDate", "Invoice not found for dueDate '%s'"),
+            Map.entry("unitId", "Invoice not found for unitId '%s'")
     );
 
 
     public Invoice generate(String tenantId, GenerateInvoiceRequest req) {
 
-        // 1. Build the natural key — this makes generation idempotent
+        // 1. Build the natural key �� this makes generation idempotent
         //    If you call generate twice for the same unit+month, it won't duplicate
         String invoiceId = String.format("INV-%s-%d%02d",
                 req.getUnitId(), req.getYear(), req.getMonth());
@@ -185,13 +188,17 @@ public class InvoiceService {
     public List<Invoice> list(String tenantId, String filter) {
         List<Invoice> tenantScopedInvoices = invoiceRepository.findAllByTenantId(tenantId);
         validateInvoiceFilter(filter);
-        return dynamicFilterEngine.apply(
-                tenantScopedInvoices,
-                filter,
-                Invoice.class,
-                FILTERABLE_FIELDS,
-                FILTER_VALUE_NOT_FOUND_MESSAGES
-        );
+        try {
+            return dynamicFilterEngine.apply(
+                    tenantScopedInvoices,
+                    filter,
+                    Invoice.class,
+                    FILTERABLE_FIELDS,
+                    FILTER_VALUE_NOT_FOUND_MESSAGES
+            );
+        } catch (FilterValueNotFoundException ex) {
+            return List.of();
+        }
     }
 
     private void validateInvoiceFilter(String filter) {

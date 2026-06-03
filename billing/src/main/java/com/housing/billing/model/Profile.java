@@ -21,7 +21,6 @@ import java.math.BigDecimal;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class Profile extends BaseDocument {
-
     @Id
     private String id;
     @Schema(example = "2BHK")

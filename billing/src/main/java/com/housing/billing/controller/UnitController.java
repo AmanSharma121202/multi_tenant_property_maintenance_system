@@ -4,6 +4,7 @@ import com.housing.billing.dto.request.CreateUnitRequest;
 import com.housing.billing.dto.request.LinkOwnerRequest;
 import com.housing.billing.dto.request.UpdateUnitRequest;
 import com.housing.billing.model.Unit;
+import com.housing.billing.security.TenantIdNormalizer;
 import com.housing.billing.service.UnitService;
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
@@ -30,12 +31,14 @@ public class UnitController {
                     example = "unitNumber==\"A-102\" && active==true"
             )
             @RequestParam(required = false) String filter) {
+        tenantId = TenantIdNormalizer.normalize(tenantId);
         return ResponseEntity.ok(unitService.list(tenantId, filter));
     }
 
     @PostMapping
     public ResponseEntity<Unit> create(@PathVariable String tenantId,
                                        @Valid @RequestBody CreateUnitRequest req) {
+        tenantId = TenantIdNormalizer.normalize(tenantId);
         return ResponseEntity.status(201).body(unitService.create(tenantId, req));
     }
 
@@ -44,6 +47,7 @@ public class UnitController {
                                     @PathVariable
                                     @NotBlank(message = "unitId is required")
                                     @Pattern(regexp = "^unit::.+$", message = "Invalid unitId format") String unitId) {
+        tenantId = TenantIdNormalizer.normalize(tenantId);
         return ResponseEntity.ok(unitService.get(tenantId, unitId));
     }
 
@@ -53,6 +57,7 @@ public class UnitController {
                                        @NotBlank(message = "unitId is required")
                                        @Pattern(regexp = "^unit::.+$", message = "Invalid unitId format") String unitId,
                                        @Valid @RequestBody UpdateUnitRequest req) {
+        tenantId = TenantIdNormalizer.normalize(tenantId);
         return ResponseEntity.ok(unitService.update(tenantId, unitId, req));
     }
 
@@ -61,7 +66,8 @@ public class UnitController {
             @PathVariable @NotBlank(message = "tenantId is required") String tenantId,
             @PathVariable
             @NotBlank(message = "unitId is required") String unitId) {
-        unitService.deactivate(tenantId, unitId);
+        tenantId = TenantIdNormalizer.normalize(tenantId);
+        unitService.delete(tenantId, unitId);
         return ResponseEntity.noContent().build();
     }
 
@@ -70,6 +76,7 @@ public class UnitController {
     public ResponseEntity<Unit> linkOwner(@PathVariable String tenantId,
                                           @PathVariable String unitId,
                                           @Valid @RequestBody LinkOwnerRequest req) {
+        tenantId = TenantIdNormalizer.normalize(tenantId);
         return ResponseEntity.ok(unitService.linkOwner(tenantId, unitId, req));
     }
 
@@ -77,6 +84,7 @@ public class UnitController {
     @PostMapping("/{unitId}:unlink-owner")
     public ResponseEntity<Unit> unlinkOwner(@PathVariable String tenantId,
                                             @PathVariable String unitId) {
+        tenantId = TenantIdNormalizer.normalize(tenantId);
         return ResponseEntity.ok(unitService.unlinkOwner(tenantId, unitId));
     }
 }

@@ -43,7 +43,7 @@ class DeleteIdValidationControllerTest {
     void deleteUnit_WithInvalidUnitIdFormat_Returns400() throws Exception {
         doThrow(new IllegalArgumentException("Invalid unitId format"))
                 .when(unitService)
-                .deactivate(eq("tenant-1"), eq("not-a-unit-id"));
+                .delete(eq("tenant-1"), eq("not-a-unit-id"));
 
         mockMvc.perform(delete("/tenants/tenant-1/units/not-a-unit-id")
                         .contentType(MediaType.APPLICATION_JSON))

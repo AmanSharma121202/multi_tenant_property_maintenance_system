@@ -3,6 +3,7 @@ package com.housing.billing.controller;
 import com.housing.billing.dto.request.RecordPaymentRequest;
 import com.housing.billing.dto.request.UpdatePaymentMetadataRequest;
 import com.housing.billing.model.Payment;
+import com.housing.billing.security.TenantIdNormalizer;
 import com.housing.billing.service.PaymentService;
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
@@ -22,6 +23,7 @@ public class PaymentController {
     public ResponseEntity<Payment> record(@PathVariable String tenantId,
                                           @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                           @Valid @RequestBody RecordPaymentRequest req) {
+        tenantId = TenantIdNormalizer.normalize(tenantId);
         return ResponseEntity.status(201).body(
                 paymentService.record(tenantId, req, idempotencyKey));
     }
@@ -34,6 +36,7 @@ public class PaymentController {
                     example = "method==\"UPI\" && amount>=500"
             )
             @RequestParam(required = false) String filter) {
+        tenantId = TenantIdNormalizer.normalize(tenantId);
         return ResponseEntity.ok(paymentService.list(tenantId, filter));
     }
 
@@ -41,6 +44,7 @@ public class PaymentController {
     @GetMapping("/{paymentId}")
     public ResponseEntity<Payment> get(@PathVariable String tenantId,
                                        @PathVariable String paymentId) {
+        tenantId = TenantIdNormalizer.normalize(tenantId);
         return ResponseEntity.ok(paymentService.get(tenantId, paymentId));
     }
 
@@ -48,6 +52,7 @@ public class PaymentController {
     public ResponseEntity<Payment> update(@PathVariable String tenantId,
                                           @PathVariable String paymentId,
                                           @Valid @RequestBody UpdatePaymentMetadataRequest req) {
+        tenantId = TenantIdNormalizer.normalize(tenantId);
         return ResponseEntity.ok(paymentService.update(tenantId, paymentId, req));
     }
 }

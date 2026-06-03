@@ -38,8 +38,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 String email = claims.getSubject();
                 Object rawRoles = claims.get("roles");
 
-                // Extract tenantId from token claims
-                String tokenTenantId = claims.get("tenantId", String.class);
+                // Extract tenantId from token claims (normalize to canonical backend format)
+                String tokenTenantIdRaw = claims.get("tenantId", String.class);
+                String tokenTenantId = TenantIdNormalizer.normalize(tokenTenantIdRaw);
 
                 // Convert roles to Spring Security format
                 List<String> safeRoles = toRoleList(rawRoles);
@@ -53,7 +54,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 var auth = new UsernamePasswordAuthenticationToken(
                         email, null, authorities);
 
-                // attach tenantId inside authentication details
+                // attach tenantId inside authentication details (canonical format)
                 auth.setDetails(new TenantAuthDetails(tokenTenantId));
 
                 SecurityContextHolder.getContext().setAuthentication(auth);

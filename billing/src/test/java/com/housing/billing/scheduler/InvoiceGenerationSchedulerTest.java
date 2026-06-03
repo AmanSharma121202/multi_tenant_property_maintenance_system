@@ -119,7 +119,10 @@ class InvoiceGenerationSchedulerTest {
 		ReflectionTestUtils.setField(scheduler, "kafkaEnabled", true);
 
 		LocalDate today = LocalDate.now();
-		Tenant pastDueTenant = tenant("tenant::1", today.minusDays(2));
+		// Keep the billing anchor within the current month so the scheduler's "due" logic
+		// (based on day-of-month) reliably treats it as due.
+		int daysBack = Math.min(2, Math.max(0, today.getDayOfMonth() - 1));
+		Tenant pastDueTenant = tenant("tenant::1", today.minusDays(daysBack));
 		when(tenantRepository.findAllTenants()).thenReturn(List.of(pastDueTenant));
 
 		scheduler.scheduleTenantInvoices();

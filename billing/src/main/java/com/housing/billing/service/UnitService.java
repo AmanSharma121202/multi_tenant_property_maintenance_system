@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -71,10 +72,17 @@ public class UnitService {
     public Unit create(String tenantId, CreateUnitRequest req) {
         String normalizedUnitNumber = req.getUnitNumber().trim();
         String normalizedProfileCode = req.getProfileCode().trim();
-        unitRepository.findByTenantIdAndUnitNumberIgnoreCase(tenantId, normalizedUnitNumber).ifPresent(existing -> {
-            throw new IllegalStateException("Unit already exists");
-        });
         validateProfileCodeExists(tenantId, normalizedProfileCode);
+
+        Optional<Unit> existing = unitRepository.findByTenantIdAndUnitNumberIgnoreCase(
+                tenantId, normalizedUnitNumber);
+        if (existing.isPresent()) {
+            Unit unit = existing.get();
+            if (unit.isActive()) {
+                throw new IllegalStateException("Unit already exists");
+            }
+            return reactivateUnit(tenantId, unit, normalizedProfileCode, req.isActive());
+        }
 
         Unit unit = new Unit();
         unit.setId("unit::" + UUID.randomUUID());
@@ -161,20 +169,34 @@ public class UnitService {
                 .orElseThrow(() -> new ResourceNotFoundException("Profile not found"));
     }
 
-    public void deactivate(String tenantId, String unitId) {
-        validateDeactivateRequest(tenantId, unitId);
+    public void delete(String tenantId, String unitId) {
+        validateDeleteRequest(tenantId, unitId);
         Unit unit = get(tenantId, unitId);
 
         if (!unit.isActive()) {
             throw new IllegalStateException("Unit is already inactive");
         }
 
+        if (unit.getOwnerId() != null && !unit.getOwnerId().isBlank()) {
+            unlinkOwner(tenantId, unitId);
+        }
+
         unit.setActive(false);
         unit.setUpdatedAt(Instant.now());
+        modelValidationService.validate(unit);
         unitRepository.save(unit);
     }
 
-    private void validateDeactivateRequest(String tenantId, String unitId) {
+    private Unit reactivateUnit(String tenantId, Unit unit, String profileCode, boolean active) {
+        unit.setProfileCode(profileCode);
+        unit.setActive(active);
+        unit.setUpdatedAt(Instant.now());
+        modelValidationService.validate(unit);
+        Unit saved = unitRepository.save(unit);
+        return enrichUnitBalances(tenantId, saved);
+    }
+
+    private void validateDeleteRequest(String tenantId, String unitId) {
         if (tenantId == null || tenantId.isBlank()) {
             throw new IllegalArgumentException("tenantId is required");
         }
