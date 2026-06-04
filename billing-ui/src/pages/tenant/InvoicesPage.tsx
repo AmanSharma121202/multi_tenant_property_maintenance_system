@@ -8,6 +8,7 @@ import type { Invoice, Unit } from '../../types'
 import { useLoadSequence } from '../../hooks/useLoadSequence'
 import { formatMoney, monthName } from '../../utils/format'
 import { Modal } from '../../components/Modal'
+import { RefreshButton } from '../../components/RefreshButton'
 
 export function InvoicesPage() {
   const { tenantId } = useAuth()
@@ -16,7 +17,6 @@ export function InvoicesPage() {
   const [units, setUnits] = useState<Unit[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [info, setInfo] = useState('')
   const [filterInput, setFilterInput] = useState('')
   const [appliedFilter, setAppliedFilter] = useState('')
   const [generateOpen, setGenerateOpen] = useState(false)
@@ -87,21 +87,21 @@ export function InvoicesPage() {
     e.preventDefault()
     if (!tenantId) return
     setError('')
-    setInfo('')
     try {
       const result = await generateTenantInvoices(tenantId, {
         year: generateForm.year,
         month: generateForm.month,
         unitId: generateForm.unitId || undefined,
       })
-      setInfo(result.message ?? 'Invoice generation completed.')
       setGenerateOpen(false)
-      // Single refresh (slightly delayed) to handle eventual consistency (e.g. Couchbase index lag).
-      await sleep(700)
-      await load()
+      // Allow Kafka consumption + Couchbase index lag before refresh.
+      const delayMs = result.queued === 'true' ? 2000 : 700
+      await sleep(delayMs)
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Failed to generate invoices')
+      return
     }
+    await load()
   }
 
   const statusClass = (s: string) => {
@@ -127,9 +127,12 @@ export function InvoicesPage() {
           <button type="submit" className="btn btn-sm">Apply</button>
           <button type="button" className="btn btn-sm" onClick={clearFilter}>Clear</button>
         </form>
-        <button type="button" className="btn btn-primary" onClick={() => setGenerateOpen(true)}>
-          Generate invoices
-        </button>
+        <div className="toolbar-actions">
+          <RefreshButton onClick={() => load()} disabled={loading} />
+          <button type="button" className="btn btn-primary" onClick={() => setGenerateOpen(true)}>
+            Generate invoices
+          </button>
+        </div>
       </div>
 
       {unitFilterId && (
@@ -138,7 +141,6 @@ export function InvoicesPage() {
         </div>
       )}
 
-      {info && <div className="alert alert-info">{info}</div>}
       {error && <div className="alert alert-error">{error}</div>}
 
       {loading ? (

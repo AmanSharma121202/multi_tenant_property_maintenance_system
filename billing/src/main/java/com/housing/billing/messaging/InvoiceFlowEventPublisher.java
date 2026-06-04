@@ -23,17 +23,17 @@ public class InvoiceFlowEventPublisher {
         log.info("Publishing tenant invoice due event: eventId={} tenantId={} unitId={} billingDate={} topic={} key={}",
                 event.getEventId(), event.getTenantId(), event.getUnitId(), event.getBillingDate(), tenantInvoiceDueTopic, event.getTenantId());
 
-        kafkaTemplate.send(tenantInvoiceDueTopic, event.getTenantId(), event)
-                .whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        log.error("Failed to publish tenant invoice due event: eventId={} tenantId={} unitId={} billingDate={} topic={} reason={}",
-                                event.getEventId(), event.getTenantId(), event.getUnitId(), event.getBillingDate(), tenantInvoiceDueTopic, ex.getMessage());
-                    } else {
-                        log.info("Published tenant invoice due event: eventId={} tenantId={} unitId={} billingDate={} topic={} partition={} offset={}",
-                                event.getEventId(), event.getTenantId(), event.getUnitId(), event.getBillingDate(),
-                                result.getRecordMetadata().topic(), result.getRecordMetadata().partition(), result.getRecordMetadata().offset());
-                    }
-                });
+        try {
+            var sendResult = kafkaTemplate.send(tenantInvoiceDueTopic, event.getTenantId(), event).get();
+            log.info("Published tenant invoice due event: eventId={} tenantId={} unitId={} billingDate={} topic={} partition={} offset={}",
+                    event.getEventId(), event.getTenantId(), event.getUnitId(), event.getBillingDate(),
+                    sendResult.getRecordMetadata().topic(), sendResult.getRecordMetadata().partition(),
+                    sendResult.getRecordMetadata().offset());
+        } catch (Exception ex) {
+            log.error("Failed to publish tenant invoice due event: eventId={} tenantId={} unitId={} billingDate={} topic={} reason={}",
+                    event.getEventId(), event.getTenantId(), event.getUnitId(), event.getBillingDate(), tenantInvoiceDueTopic, ex.getMessage());
+            throw new IllegalStateException("Failed to publish tenant invoice due event", ex);
+        }
     }
 
     public void publishOwnerUnitLinked(OwnerUnitLinkedEvent event) {

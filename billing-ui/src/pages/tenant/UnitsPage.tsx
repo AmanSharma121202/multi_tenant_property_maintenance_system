@@ -11,6 +11,7 @@ import {
   updateUnit,
 } from '../../api/units'
 import { Modal } from '../../components/Modal'
+import { RefreshButton } from '../../components/RefreshButton'
 import { ApiClientError } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import type { Owner, Profile, Unit } from '../../types'
@@ -44,6 +45,7 @@ export function UnitsPage() {
   const [linkOwnerId, setLinkOwnerId] = useState('')
   const [saving, setSaving] = useState(false)
   const [paymentSaving, setPaymentSaving] = useState(false)
+  const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false)
   const [paymentForm, setPaymentForm] = useState({
     method: 'UPI',
     amount: 0,
@@ -197,9 +199,17 @@ export function UnitsPage() {
     }
   }
 
-  const handlePayment = async (e: FormEvent) => {
+  const handlePaymentSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (!tenantId || !selected) return
+    const form = e.currentTarget as HTMLFormElement
+    if (!form.reportValidity()) return
+    setPaymentConfirmOpen(true)
+  }
+
+  const handlePaymentConfirm = async () => {
+    if (!tenantId || !selected) return
+    setPaymentConfirmOpen(false)
     setPaymentSaving(true)
     setError('')
     try {
@@ -262,9 +272,12 @@ export function UnitsPage() {
           <button type="submit" className="btn btn-sm">Apply</button>
           <button type="button" className="btn btn-sm" onClick={clearFilter}>Clear</button>
         </form>
-        <button type="button" className="btn btn-primary" onClick={openCreate}>
-          + Add unit
-        </button>
+        <div className="toolbar-actions">
+          <RefreshButton onClick={() => load()} disabled={loading} />
+          <button type="button" className="btn btn-primary" onClick={openCreate}>
+            + Add unit
+          </button>
+        </div>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -317,7 +330,7 @@ export function UnitsPage() {
                       className="btn btn-sm"
                       onClick={() => openDetails(u)}
                     >
-                      View details
+                      Record payment
                     </button>
                   </td>
                 </tr>
@@ -411,7 +424,10 @@ export function UnitsPage() {
       <Modal
         title={`Unit details — ${selected?.unitNumber ?? ''}`}
         open={modal === 'details'}
-        onClose={() => setModal(null)}
+        onClose={() => {
+          setPaymentConfirmOpen(false)
+          setModal(null)
+        }}
       >
         {selected && (
           <div className="form-stack">
@@ -432,7 +448,7 @@ export function UnitsPage() {
                 Show invoices for unit
               </button>
             </div>
-            <form className="form-stack" onSubmit={handlePayment}>
+            <form className="form-stack" onSubmit={handlePaymentSubmit}>
               <label>
                 Payment method
                 <select
@@ -490,6 +506,41 @@ export function UnitsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title="Confirm payment"
+        open={paymentConfirmOpen}
+        onClose={() => setPaymentConfirmOpen(false)}
+      >
+        {selected && (
+          <div className="form-stack">
+            <p>
+              Register a payment of{' '}
+              <strong>{formatMoney(paymentForm.amount)}</strong> via{' '}
+              <strong>{paymentForm.method}</strong> for unit{' '}
+              <strong>{selected.unitNumber}</strong>?
+            </p>
+            <div className="form-actions">
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setPaymentConfirmOpen(false)}
+                disabled={paymentSaving}
+              >
+                No
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handlePaymentConfirm}
+                disabled={paymentSaving}
+              >
+                {paymentSaving ? 'Recording…' : 'Yes'}
+              </button>
+            </div>
           </div>
         )}
       </Modal>

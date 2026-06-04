@@ -6,6 +6,7 @@ import {
   updateProfile,
 } from '../../api/profiles'
 import { Modal } from '../../components/Modal'
+import { RefreshButton } from '../../components/RefreshButton'
 import { ApiClientError } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import type { Profile } from '../../types'
@@ -150,9 +151,12 @@ export function ProfilesPage() {
           <button type="submit" className="btn btn-sm">Apply</button>
           <button type="button" className="btn btn-sm" onClick={clearFilter}>Clear</button>
         </form>
-        <button type="button" className="btn btn-primary" onClick={openCreate}>
-          + Add profile
-        </button>
+        <div className="toolbar-actions">
+          <RefreshButton onClick={() => load()} disabled={loading} />
+          <button type="button" className="btn btn-primary" onClick={openCreate}>
+            + Add profile
+          </button>
+        </div>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

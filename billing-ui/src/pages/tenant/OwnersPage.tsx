@@ -9,6 +9,7 @@ import {
   updateOwner,
 } from '../../api/owners'
 import { Modal } from '../../components/Modal'
+import { RefreshButton } from '../../components/RefreshButton'
 import { ApiClientError } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import type { Owner, Unit } from '../../types'
@@ -195,9 +196,12 @@ export function OwnersPage() {
           <button type="submit" className="btn btn-sm">Apply</button>
           <button type="button" className="btn btn-sm" onClick={clearFilter}>Clear</button>
         </form>
-        <button type="button" className="btn btn-primary" onClick={openCreate}>
-          + Add owner
-        </button>
+        <div className="toolbar-actions">
+          <RefreshButton onClick={() => load()} disabled={loading} />
+          <button type="button" className="btn btn-primary" onClick={openCreate}>
+            + Add owner
+          </button>
+        </div>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

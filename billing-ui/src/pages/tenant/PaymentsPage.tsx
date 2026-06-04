@@ -8,6 +8,7 @@ import { useLoadSequence } from '../../hooks/useLoadSequence'
 import { formatDate, formatMoney } from '../../utils/format'
 import { mergeListsById } from '../../utils/listState'
 import { Modal } from '../../components/Modal'
+import { RefreshButton } from '../../components/RefreshButton'
 
 export function PaymentsPage() {
   const { tenantId } = useAuth()
@@ -75,6 +76,7 @@ export function PaymentsPage() {
           <button type="submit" className="btn btn-sm">Apply</button>
           <button type="button" className="btn btn-sm" onClick={clearFilter}>Clear</button>
         </form>
+        <RefreshButton onClick={() => load()} disabled={loading} />
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

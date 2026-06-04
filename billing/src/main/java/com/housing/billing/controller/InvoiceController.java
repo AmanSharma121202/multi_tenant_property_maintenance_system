@@ -77,6 +77,38 @@ public class InvoiceController {
         LocalDate invoiceDate = target.atDay(1);
         String flowId = "manual-" + UUID.randomUUID();
 
+        Map<String, String> response = new java.util.HashMap<>();
+        response.put("tenantId", tenantId);
+        response.put("year", String.valueOf(request.getYear()));
+        response.put("month", String.valueOf(request.getMonth()));
+        response.put("flowId", flowId);
+        if (request.getUnitId() != null && !request.getUnitId().isBlank()) {
+            response.put("unitId", request.getUnitId());
+        }
+
+        if (kafkaEnabled) {
+            TenantInvoiceDueEvent event = TenantInvoiceDueEvent.builder()
+                    .eventId(flowId)
+                    .tenantId(tenantId)
+                    .unitId(request.getUnitId())
+                    .billingDate(invoiceDate)
+                    .delaySeconds(0L)
+                    .occurredAt(Instant.now())
+                    .build();
+            invoiceFlowEventPublisher.publishTenantInvoiceDue(event);
+            log.info("Manual invoice generation queued via Kafka: flowId={} tenant={} unitId={} billingDate={}",
+                    flowId, tenantId, request.getUnitId(), invoiceDate);
+
+            response.put("queued", "true");
+            response.put("message",
+                    "Invoice generation queued. Invoices will be created when the event is consumed.");
+            response.put("created", "0");
+            response.put("skipped", "0");
+            response.put("failed", "0");
+            response.put("units", "0");
+            return ResponseEntity.ok(response);
+        }
+
         TenantInvoiceGenerationResult result = asyncInvoiceGenerationService.scheduleTenantInvoiceGeneration(
                 tenantId,
                 invoiceDate,
@@ -85,40 +117,16 @@ public class InvoiceController {
                 request.getUnitId()
         );
 
-        if (kafkaEnabled) {
-            try {
-                TenantInvoiceDueEvent event = TenantInvoiceDueEvent.builder()
-                        .eventId(flowId)
-                        .tenantId(tenantId)
-                        .unitId(request.getUnitId())
-                        .billingDate(invoiceDate)
-                        .delaySeconds(0L)
-                        .occurredAt(Instant.now())
-                        .build();
-                invoiceFlowEventPublisher.publishTenantInvoiceDue(event);
-            } catch (Exception ex) {
-                log.warn("Manual invoice generation succeeded but Kafka publish failed: flowId={} tenant={} reason={}",
-                        flowId, tenantId, ex.getMessage());
-            }
-        }
-
-        Map<String, String> response = new java.util.HashMap<>();
+        response.put("queued", "false");
         response.put("message", buildGenerationMessage(result));
         response.put("failed", String.valueOf(result.failed()));
         if (result.failed() > 0) {
             response.put("message",
                     buildGenerationMessage(result) + " (" + result.failed() + " unit(s) failed — check server logs)");
         }
-        response.put("tenantId", tenantId);
-        response.put("year", String.valueOf(request.getYear()));
-        response.put("month", String.valueOf(request.getMonth()));
-        response.put("flowId", flowId);
         response.put("created", String.valueOf(result.created()));
         response.put("skipped", String.valueOf(result.skipped()));
         response.put("units", String.valueOf(result.units()));
-        if (request.getUnitId() != null && !request.getUnitId().isBlank()) {
-            response.put("unitId", request.getUnitId());
-        }
 
         return ResponseEntity.ok(response);
     }

@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -44,7 +45,7 @@ class InvoiceControllerTest {
     private InvoiceController invoiceController;
 
     @Test
-    void generateTenantInvoices_publishesKafkaEvent() {
+    void generateTenantInvoices_publishesKafkaEventWithoutDirectGeneration() {
         ReflectionTestUtils.setField(invoiceController, "kafkaEnabled", true);
 
         GenerateTenantInvoicesRequest request = new GenerateTenantInvoicesRequest();
@@ -52,21 +53,14 @@ class InvoiceControllerTest {
         request.setMonth(5);
         request.setUnitId("unit::101");
 
-        when(asyncInvoiceGenerationService.scheduleTenantInvoiceGeneration(
-                eq("tenant::1"),
-                eq(LocalDate.of(2026, 5, 1)),
-                eq(Duration.ZERO),
-                argThat(flowId -> flowId != null && flowId.startsWith("manual-")),
-                eq("unit::101")
-        )).thenReturn(new TenantInvoiceGenerationResult(1, 1, 0, 0));
-
         ResponseEntity<Map<String, String>> response = invoiceController.generateTenantInvoices("tenant::1", request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("1", response.getBody().get("created"));
+        assertEquals("true", response.getBody().get("queued"));
+        assertEquals("0", response.getBody().get("created"));
         assertEquals("0", response.getBody().get("failed"));
         assertEquals("unit::101", response.getBody().get("unitId"));
-        verify(asyncInvoiceGenerationService).scheduleTenantInvoiceGeneration(
+        verify(asyncInvoiceGenerationService, never()).scheduleTenantInvoiceGeneration(
                 eq("tenant::1"),
                 eq(LocalDate.of(2026, 5, 1)),
                 eq(Duration.ZERO),
