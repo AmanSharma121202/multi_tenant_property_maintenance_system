@@ -1,17 +1,16 @@
 package com.housing.billing.dto.request;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.housing.billing.validation.AllowedConfigValue;
 import com.housing.billing.validation.AllowedValueType;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Data;
-
-import java.time.LocalDate;
 
 @Data
 public class CreateTenantRequest {
@@ -26,11 +25,12 @@ public class CreateTenantRequest {
     @AllowedConfigValue(type = AllowedValueType.CURRENCY, message = "currency must be one of configured validCurrency values")
     private String currency;    // e.g. INR
     
-    @Schema(example = "2026-04-20")
-    @NotNull(message = "billing_date is required")
-    @JsonProperty("billing_date")
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
-    private LocalDate billingDate;
+    @Schema(example = "20")
+    @NotNull(message = "billing_day is required")
+    @Min(value = 1, message = "billing_day must be between 1 and 31")
+    @Max(value = 31, message = "billing_day must be between 1 and 31")
+    @JsonProperty("billing_day")
+    private Integer billingDay;
 
     @Schema(example = "PERCENTAGE")
     @NotBlank(message = "lateFeeType is required")

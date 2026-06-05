@@ -107,6 +107,7 @@ public class AsyncInvoiceGenerationService {
         int successCount = 0;
         int failureCount = 0;
         int skippedExistingCount = 0;
+        int skippedBeforeStartDateCount = 0;
 
         for (String unitIdForLoop : unitIds) {
             try {
@@ -118,6 +119,18 @@ public class AsyncInvoiceGenerationService {
                     log.debug("Tenant invoice generation skipped: flowId={} tenant={} unit={} cycle={}-{} reason=already-exists",
                             flowId, tenantId, unitIdForLoop, invoiceDate.getYear(), invoiceDate.getMonthValue());
                     continue;
+                }
+
+                // Check unitStartDate: skip if the entire cycle starts before the unit existed
+                Unit unitForLoop = unitRepository.findById(unitIdForLoop).orElse(null);
+                if (unitForLoop != null && unitForLoop.getUnitStartDate() != null) {
+                    LocalDate cycleStart = LocalDate.of(invoiceDate.getYear(), invoiceDate.getMonthValue(), 1);
+                    if (cycleStart.isBefore(unitForLoop.getUnitStartDate())) {
+                        skippedBeforeStartDateCount++;
+                        log.debug("Tenant invoice generation skipped: flowId={} tenant={} unit={} cycle={}-{} reason=before-unit-start-date unitStartDate={}",
+                                flowId, tenantId, unitIdForLoop, invoiceDate.getYear(), invoiceDate.getMonthValue(), unitForLoop.getUnitStartDate());
+                        continue;
+                    }
                 }
 
                 GenerateInvoiceRequest req = new GenerateInvoiceRequest();
@@ -137,8 +150,8 @@ public class AsyncInvoiceGenerationService {
         }
 
         long durationMs = System.currentTimeMillis() - startedAtMs;
-        log.info("Tenant invoice generation completed: flowId={} tenant={} unitId={} billingDate={} unitCount={} successCount={} skippedExistingCount={} failureCount={} durationMs={}",
-                flowId, tenantId, unitId, invoiceDate, unitIds.size(), successCount, skippedExistingCount, failureCount, durationMs);
+        log.info("Tenant invoice generation completed: flowId={} tenant={} unitId={} billingDate={} unitCount={} successCount={} skippedExistingCount={} skippedBeforeStartDateCount={} failureCount={} durationMs={}",
+                flowId, tenantId, unitId, invoiceDate, unitIds.size(), successCount, skippedExistingCount, skippedBeforeStartDateCount, failureCount, durationMs);
         return new TenantInvoiceGenerationResult(unitIds.size(), successCount, skippedExistingCount, failureCount);
     }
 

@@ -43,7 +43,7 @@ app:
       max-pool-size: 8
       queue-capacity: 200
       tenant-scan-cron: "0 */1 * * * *"
-      tenant-timezone: "UTC"
+      tenant-timezone: "Asia/Kolkata"
   kafka:
     enabled: true
     delay:

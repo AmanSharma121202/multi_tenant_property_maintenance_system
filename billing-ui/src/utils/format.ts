@@ -16,10 +16,19 @@ export function formatDate(value?: string) {
   })
 }
 
-export function tenantBillingDate(tenant: { billing_date?: string; billingDate?: string }) {
-  return tenant.billing_date ?? tenant.billingDate ?? ''
+export function tenantBillingDay(tenant: { billing_day?: number; billingDay?: number }) {
+  return tenant.billing_day ?? tenant.billingDay ?? 1
+}
+
+export function formatOrdinalDay(day: number) {
+  if (day <= 0 || day > 31) return String(day)
+  const suffixes = ['th', 'st', 'nd', 'rd']
+  const mod100 = day % 100
+  const suffix = (mod100 >= 11 && mod100 <= 13) ? 'th' : (suffixes[day % 10] ?? 'th')
+  return `${day}${suffix}`
 }
 
 export function monthName(month: number) {
   return new Date(2000, month - 1, 1).toLocaleString('en', { month: 'long' })
 }
+

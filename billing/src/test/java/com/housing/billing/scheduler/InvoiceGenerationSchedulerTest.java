@@ -1,6 +1,7 @@
 package com.housing.billing.scheduler;
 
 import com.housing.billing.messaging.InvoiceFlowEventPublisher;
+import com.housing.billing.messaging.TenantInvoiceDueEvent;
 import com.housing.billing.model.Tenant;
 import com.housing.billing.repository.TenantRepository;
 import com.housing.billing.service.AsyncInvoiceGenerationService;
@@ -13,9 +14,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -161,10 +165,41 @@ class InvoiceGenerationSchedulerTest {
 		verify(invoiceFlowEventPublisher, times(2)).publishTenantInvoiceDue(org.mockito.ArgumentMatchers.any());
 	}
 
+	@Test
+	void scheduleTenantInvoices_usesCurrentMonthBillingCycle() {
+		ReflectionTestUtils.setField(scheduler, "tenantTimezone", "UTC");
+		ReflectionTestUtils.setField(scheduler, "kafkaEnabled", true);
+
+		LocalDate today = LocalDate.now();
+		when(tenantRepository.findAllTenants()).thenReturn(List.of(tenant("tenant::1", today)));
+
+		scheduler.scheduleTenantInvoices();
+
+		var captor = forClass(TenantInvoiceDueEvent.class);
+		verify(invoiceFlowEventPublisher).publishTenantInvoiceDue(captor.capture());
+		assertEquals(YearMonth.from(today).atDay(1), captor.getValue().getBillingDate());
+	}
+
+	@Test
+	void scheduleTenantInvoices_readsBillingDayFromLegacyBillingDate() {
+		ReflectionTestUtils.setField(scheduler, "tenantTimezone", "UTC");
+		ReflectionTestUtils.setField(scheduler, "kafkaEnabled", true);
+
+		LocalDate today = LocalDate.now();
+		Tenant legacyTenant = new Tenant();
+		legacyTenant.setId("tenant::legacy");
+		ReflectionTestUtils.setField(legacyTenant, "legacyBillingDate", today);
+		when(tenantRepository.findAllTenants()).thenReturn(List.of(legacyTenant));
+
+		scheduler.scheduleTenantInvoices();
+
+		verify(invoiceFlowEventPublisher, times(1)).publishTenantInvoiceDue(org.mockito.ArgumentMatchers.any());
+	}
+
 	private Tenant tenant(String id, LocalDate invoiceDate) {
 		Tenant tenant = new Tenant();
 		tenant.setId(id);
-		tenant.setBillingDate(invoiceDate);
+		tenant.setBillingDay(invoiceDate.getDayOfMonth());
 		return tenant;
 	}
 }

@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -75,6 +76,34 @@ class InvoiceControllerTest {
                         && event.getEventId() != null
                         && event.getEventId().startsWith("manual-")
         ));
+        verify(invoiceService).validateTenantInvoiceGeneration("tenant::1", 2026, 5, "unit::101");
+    }
+
+    @Test
+    void generateTenantInvoices_rejectsCycleBeforeUnitStartDate() {
+        ReflectionTestUtils.setField(invoiceController, "kafkaEnabled", true);
+
+        GenerateTenantInvoicesRequest request = new GenerateTenantInvoicesRequest();
+        request.setYear(2025);
+        request.setMonth(12);
+        request.setUnitId("unit::101");
+
+        doThrow(new IllegalArgumentException(
+                "Cannot generate invoice for A-101: billing period is before unit start date (2026-01-01)"))
+                .when(invoiceService)
+                .validateTenantInvoiceGeneration("tenant::1", 2025, 12, "unit::101");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> invoiceController.generateTenantInvoices("tenant::1", request));
+
+        verifyNoInteractions(invoiceFlowEventPublisher);
+        verify(asyncInvoiceGenerationService, never()).scheduleTenantInvoiceGeneration(
+                eq("tenant::1"),
+                eq(LocalDate.of(2025, 12, 1)),
+                eq(Duration.ZERO),
+                org.mockito.ArgumentMatchers.anyString(),
+                eq("unit::101")
+        );
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.housing.billing.model;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.housing.billing.model.BaseDocument;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -15,6 +16,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import org.springframework.data.annotation.Transient;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Document
 @Collection("units")
@@ -39,8 +41,12 @@ public class Unit extends BaseDocument {
     private BigDecimal dueAmount;
     private BigDecimal unitBalance;
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private LocalDate unitStartDate;  // Date from which this unit is billable (nullable for backward compat)
+
     @Transient
     @JsonIgnore
     @Schema(hidden = true)
     private BigDecimal totalBalance;
 }
+

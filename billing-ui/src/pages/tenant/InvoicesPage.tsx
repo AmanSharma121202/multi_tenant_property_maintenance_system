@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext'
 import type { Invoice, Unit } from '../../types'
 import { useLoadSequence } from '../../hooks/useLoadSequence'
 import { formatMoney, monthName } from '../../utils/format'
+import { validateInvoiceGenerationPeriod } from '../../utils/invoiceValidation'
 import { Modal } from '../../components/Modal'
 import { RefreshButton } from '../../components/RefreshButton'
 
@@ -20,6 +21,7 @@ export function InvoicesPage() {
   const [filterInput, setFilterInput] = useState('')
   const [appliedFilter, setAppliedFilter] = useState('')
   const [generateOpen, setGenerateOpen] = useState(false)
+  const [generateError, setGenerateError] = useState('')
   const [generateForm, setGenerateForm] = useState(() => {
     const now = new Date()
     const prev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
@@ -83,10 +85,27 @@ export function InvoicesPage() {
 
   const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
+  const openGenerateModal = () => {
+    setGenerateError('')
+    setGenerateOpen(true)
+  }
+
   const handleGenerate = async (e: FormEvent) => {
     e.preventDefault()
     if (!tenantId) return
-    setError('')
+    setGenerateError('')
+
+    const validationError = validateInvoiceGenerationPeriod(
+      generateForm.year,
+      generateForm.month,
+      units,
+      generateForm.unitId || undefined,
+    )
+    if (validationError) {
+      setGenerateError(validationError)
+      return
+    }
+
     try {
       const result = await generateTenantInvoices(tenantId, {
         year: generateForm.year,
@@ -94,11 +113,12 @@ export function InvoicesPage() {
         unitId: generateForm.unitId || undefined,
       })
       setGenerateOpen(false)
+      setGenerateError('')
       // Allow Kafka consumption + Couchbase index lag before refresh.
       const delayMs = result.queued === 'true' ? 2000 : 700
       await sleep(delayMs)
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Failed to generate invoices')
+      setGenerateError(err instanceof ApiClientError ? err.message : 'Failed to generate invoices')
       return
     }
     await load()
@@ -129,7 +149,7 @@ export function InvoicesPage() {
         </form>
         <div className="toolbar-actions">
           <RefreshButton onClick={() => load()} disabled={loading} />
-          <button type="button" className="btn btn-primary" onClick={() => setGenerateOpen(true)}>
+          <button type="button" className="btn btn-primary" onClick={openGenerateModal}>
             Generate invoices
           </button>
         </div>
@@ -184,9 +204,13 @@ export function InvoicesPage() {
       <Modal
         title="Generate invoices"
         open={generateOpen}
-        onClose={() => setGenerateOpen(false)}
+        onClose={() => {
+          setGenerateOpen(false)
+          setGenerateError('')
+        }}
       >
         <form className="form-stack" onSubmit={handleGenerate}>
+          {generateError && <div className="alert alert-error">{generateError}</div>}
           <label>
             Year
             <input
@@ -194,7 +218,10 @@ export function InvoicesPage() {
               min={2000}
               max={2100}
               value={generateForm.year}
-              onChange={(e) => setGenerateForm({ ...generateForm, year: Number(e.target.value) })}
+              onChange={(e) => {
+                setGenerateError('')
+                setGenerateForm({ ...generateForm, year: Number(e.target.value) })
+              }}
               required
             />
           </label>
@@ -205,7 +232,10 @@ export function InvoicesPage() {
               min={1}
               max={12}
               value={generateForm.month}
-              onChange={(e) => setGenerateForm({ ...generateForm, month: Number(e.target.value) })}
+              onChange={(e) => {
+                setGenerateError('')
+                setGenerateForm({ ...generateForm, month: Number(e.target.value) })
+              }}
               required
             />
           </label>
@@ -213,7 +243,10 @@ export function InvoicesPage() {
             Unit (optional)
             <select
               value={generateForm.unitId}
-              onChange={(e) => setGenerateForm({ ...generateForm, unitId: e.target.value })}
+              onChange={(e) => {
+                setGenerateError('')
+                setGenerateForm({ ...generateForm, unitId: e.target.value })
+              }}
             >
               <option value="">All units</option>
               {units.map((u) => (
@@ -222,7 +255,14 @@ export function InvoicesPage() {
             </select>
           </label>
           <div className="form-actions">
-            <button type="button" className="btn" onClick={() => setGenerateOpen(false)}>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                setGenerateOpen(false)
+                setGenerateError('')
+              }}
+            >
               Cancel
             </button>
             <button type="submit" className="btn btn-primary">

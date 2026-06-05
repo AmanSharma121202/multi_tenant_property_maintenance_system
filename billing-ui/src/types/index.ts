@@ -28,8 +28,8 @@ export interface Tenant {
   id: string
   name: string
   currency: string
-  billing_date?: string
-  billingDate?: string
+  billing_day?: number
+  billingDay?: number
   lateFeeType: string
   lateFeeValue: number
   address: string
@@ -46,6 +46,7 @@ export interface Unit {
   active: boolean
   dueAmount?: number
   unitBalance?: number
+  unitStartDate?: string
   tenantId?: string
 }
 

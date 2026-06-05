@@ -5,6 +5,7 @@ import com.housing.billing.messaging.TenantInvoiceDueEvent;
 import com.housing.billing.model.Tenant;
 import com.housing.billing.repository.TenantRepository;
 import com.housing.billing.service.AsyncInvoiceGenerationService;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
@@ -33,6 +35,15 @@ public class InvoiceGenerationScheduler {
 
     @Value("${app.kafka.enabled:false}")
     private boolean kafkaEnabled;
+
+    @Value("${app.async.invoice-generation.tenant-scan-cron:0 */1 * * * *}")
+    private String tenantScanCron;
+
+    @PostConstruct
+    void logSchedulerConfig() {
+        log.info("Invoice generation scheduler registered: cron='{}' timezone='{}' kafkaEnabled={}",
+                tenantScanCron, tenantTimezone, kafkaEnabled);
+    }
 
     @Scheduled(cron = "${app.async.invoice-generation.tenant-scan-cron:0 */1 * * * *}")
     public void scheduleTenantInvoices() {
@@ -70,25 +81,25 @@ public class InvoiceGenerationScheduler {
         int tenantFailureCount = 0;
         for (Tenant tenant : tenants) {
             try {
-                LocalDate tenantBillingAnchor = tenant.getBillingDate();
-                if (tenantBillingAnchor == null) {
+                Integer tenantBillingDay = tenant.getBillingDay();
+                if (tenantBillingDay == null || tenantBillingDay == 0) {
                     skippedNoAnchorCount++;
-                    log.debug("Skipping tenant in scheduler: tenant={} reason=no-invoice-anchor", tenant.getId());
+                    log.info("Skipping tenant in scheduler: tenant={} reason=no-billing-day (set billing_day on tenant or restart after migration)",
+                            tenant.getId());
                     continue;
                 }
 
-                // invoiceDate on tenant acts as billing-day anchor (not a one-time exact date).
-                int preferredDay = tenantBillingAnchor.getDayOfMonth();
-                int dueDayThisMonth = Math.min(preferredDay, today.lengthOfMonth());
-                if (today.getDayOfMonth() < dueDayThisMonth) {
+                // Compute effective billing day for this month (handle short months)
+                int effectiveBillingDay = Math.min(tenantBillingDay, today.lengthOfMonth());
+                if (today.getDayOfMonth() < effectiveBillingDay) {
                     skippedNotDueCount++;
-                    log.debug("Skipping tenant in scheduler: tenant={} reason=not-due-today dueDay={} todayDay={}",
-                            tenant.getId(), dueDayThisMonth, today.getDayOfMonth());
+                    log.info("Skipping tenant in scheduler: tenant={} reason=not-due-today billingDay={} todayDay={}",
+                            tenant.getId(), effectiveBillingDay, today.getDayOfMonth());
                     continue;
                 }
 
-                // Generate invoice for the current billing cycle.
-                LocalDate billingDate = today;
+                // Generate invoice for the current billing cycle (same month as manual generation)
+                LocalDate billingDate = YearMonth.from(today).atDay(1);
 
                 TenantInvoiceDueEvent event = TenantInvoiceDueEvent.builder()
                         .eventId(UUID.randomUUID().toString())

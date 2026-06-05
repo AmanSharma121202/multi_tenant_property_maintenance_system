@@ -174,7 +174,7 @@ class InvoiceServiceDateComputationTest {
 
         Tenant tenant = new Tenant();
         tenant.setId("tenant::1");
-        tenant.setBillingDate(LocalDate.of(2026, 4, 5));
+        tenant.setBillingDay(5);
         lenient().when(tenantRepository.findById("tenant::1")).thenReturn(Optional.of(tenant));
 
         when(invoiceRepository.findById("INV-unit::101-202604")).thenReturn(Optional.empty());

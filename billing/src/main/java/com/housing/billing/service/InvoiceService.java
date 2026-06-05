@@ -59,6 +59,29 @@ public class InvoiceService {
     );
 
 
+    public void validateTenantInvoiceGeneration(String tenantId, int year, int month, String unitId) {
+        LocalDate cycleStart = LocalDate.of(year, month, 1);
+        List<Unit> units;
+        if (unitId != null && !unitId.isBlank()) {
+            Unit unit = unitRepository.findById(unitId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Unit not found"));
+            if (!tenantId.equals(unit.getTenantId())) {
+                throw new TenantIsolationException("Tenant isolation violation");
+            }
+            units = List.of(unit);
+        } else {
+            units = unitRepository.findByTenantIdAndActive(tenantId, true);
+        }
+
+        for (Unit unit : units) {
+            if (unit.getUnitStartDate() != null && cycleStart.isBefore(unit.getUnitStartDate())) {
+                throw new IllegalArgumentException(
+                        "Cannot generate invoice for " + unit.getUnitNumber()
+                                + ": billing period is before unit start date (" + unit.getUnitStartDate() + ")");
+            }
+        }
+    }
+
     public Invoice generate(String tenantId, GenerateInvoiceRequest req) {
 
         // 1. Build the natural key �� this makes generation idempotent
@@ -97,6 +120,15 @@ public class InvoiceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Unit not found"));
         if (!tenantId.equals(unit.getTenantId())) {
             throw new TenantIsolationException("Tenant isolation violation");
+        }
+
+        // unitStartDate validation: block invoice if entire cycle starts before unit existed
+        if (unit.getUnitStartDate() != null) {
+            LocalDate cycleStartDate = LocalDate.of(req.getYear(), req.getMonth(), 1);
+            if (cycleStartDate.isBefore(unit.getUnitStartDate())) {
+                throw new IllegalArgumentException(
+                        "Cannot generate invoice for a cycle before unit start date (" + unit.getUnitStartDate() + ")");
+            }
         }
         Profile profile = profileRepository.findByTenantIdAndCode(tenantId, unit.getProfileCode())
                 .orElseThrow(() -> new ResourceNotFoundException("Profile not found"));
@@ -139,7 +171,7 @@ public class InvoiceService {
             Tenant tenant = tenantRepository.findById(tenantId)
                     .orElseThrow(() -> new ResourceNotFoundException("Tenant not found"));
 
-            int preferredDay = tenant.getBillingDate() == null ? 1 : tenant.getBillingDate().getDayOfMonth();
+            int preferredDay = tenant.getBillingDay() == null || tenant.getBillingDay() == 0 ? 1 : tenant.getBillingDay();
             int maxDay = YearMonth.of(req.getYear(), req.getMonth()).lengthOfMonth();
             int issueDay = Math.min(preferredDay, maxDay);
 

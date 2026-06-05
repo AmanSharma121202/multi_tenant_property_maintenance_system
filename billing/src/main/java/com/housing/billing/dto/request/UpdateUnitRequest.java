@@ -1,10 +1,13 @@
 package com.housing.billing.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.housing.billing.validation.AllowedConfigValue;
 import com.housing.billing.validation.AllowedValueType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Pattern;
 import lombok.Data;
+
+import java.time.LocalDate;
 
 @Data
 public class UpdateUnitRequest {
@@ -19,4 +22,9 @@ public class UpdateUnitRequest {
 
     @Schema(example = "true")
     private Boolean active;
+
+    @Schema(example = "2026-01-15")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private LocalDate unitStartDate;
 }
+

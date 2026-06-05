@@ -3,7 +3,7 @@ import { createTenant, listTenants, updateTenant } from '../../api/tenants'
 import { Modal } from '../../components/Modal'
 import { ApiClientError } from '../../api/client'
 import type { Tenant } from '../../types'
-import { formatDate, tenantBillingDate } from '../../utils/format'
+import { tenantBillingDay, formatOrdinalDay } from '../../utils/format'
 
 const CURRENCIES = ['INR', 'USD', 'EUR', 'GBP']
 const LATE_FEE_TYPES = ['PERCENTAGE', 'FIXED', 'NONE']
@@ -11,7 +11,7 @@ const LATE_FEE_TYPES = ['PERCENTAGE', 'FIXED', 'NONE']
 const emptyCreate = {
   name: '',
   currency: 'INR',
-  billing_date: new Date().toISOString().slice(0, 10),
+  billing_day: 1,
   lateFeeType: 'PERCENTAGE',
   lateFeeValue: 2,
   address: '',
@@ -48,7 +48,7 @@ export function TenantsPage() {
     setEditForm({
       name: tenant.name,
       currency: tenant.currency,
-      billing_date: tenantBillingDate(tenant),
+      billing_day: tenantBillingDay(tenant),
       lateFeeType: tenant.lateFeeType,
       lateFeeValue: tenant.lateFeeValue,
       address: tenant.address ?? '',
@@ -63,7 +63,7 @@ export function TenantsPage() {
       const updated = await updateTenant(selected.id, {
         name: editForm.name,
         currency: editForm.currency,
-        billing_date: editForm.billing_date as string,
+        billing_day: editForm.billing_day as number,
         lateFeeType: editForm.lateFeeType,
         lateFeeValue: editForm.lateFeeValue,
         address: editForm.address,
@@ -113,7 +113,7 @@ export function TenantsPage() {
                 <th>Name</th>
                 <th>ID</th>
                 <th>Currency</th>
-                <th>Billing date</th>
+                <th>Billing day</th>
                 <th>Late fee</th>
                 <th></th>
               </tr>
@@ -124,7 +124,7 @@ export function TenantsPage() {
                   <td><strong>{t.name}</strong></td>
                   <td><code className="code-sm">{t.id}</code></td>
                   <td>{t.currency}</td>
-                  <td>{formatDate(tenantBillingDate(t))}</td>
+                  <td>{formatOrdinalDay(tenantBillingDay(t))} of every month</td>
                   <td>{t.lateFeeType} ({t.lateFeeValue})</td>
                   <td>
                     <button type="button" className="btn btn-sm" onClick={() => openDetail(t)}>
@@ -181,11 +181,13 @@ export function TenantsPage() {
               </select>
             </label>
             <label>
-              Billing date
+              Billing day (1–31)
               <input
-                type="date"
-                value={(editForm.billing_date as string) ?? ''}
-                onChange={(e) => setEditForm({ ...editForm, billing_date: e.target.value })}
+                type="number"
+                min={1}
+                max={31}
+                value={editForm.billing_day ?? 1}
+                onChange={(e) => setEditForm({ ...editForm, billing_day: parseInt(e.target.value) || 1 })}
                 required
               />
             </label>
@@ -261,11 +263,13 @@ export function TenantsPage() {
             </select>
           </label>
           <label>
-            Billing date
+            Billing day (1–31)
             <input
-              type="date"
-              value={createForm.billing_date}
-              onChange={(e) => setCreateForm({ ...createForm, billing_date: e.target.value })}
+              type="number"
+              min={1}
+              max={31}
+              value={createForm.billing_day}
+              onChange={(e) => setCreateForm({ ...createForm, billing_day: parseInt(e.target.value) || 1 })}
               required
             />
           </label>
@@ -314,3 +318,4 @@ export function TenantsPage() {
     </div>
   )
 }
+

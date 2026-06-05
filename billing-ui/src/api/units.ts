@@ -15,7 +15,7 @@ export function listUnits(tenantId: string, filter?: string) {
 
 export function createUnit(
   tenantId: string,
-  data: { unitNumber: string; profileCode: string; active: boolean },
+  data: { unitNumber: string; profileCode: string; active: boolean; unitStartDate?: string },
 ) {
   return apiRequest<Unit>(base(tenantId), {
     method: 'POST',
@@ -26,7 +26,7 @@ export function createUnit(
 export function updateUnit(
   tenantId: string,
   unitId: string,
-  data: Partial<{ unitNumber: string; profileCode: string; active: boolean }>,
+  data: Partial<{ unitNumber: string; profileCode: string; active: boolean; unitStartDate?: string }>,
 ) {
   return apiRequest<Unit>(tenantResourceId(tenantId, 'units', unitId), {
     method: 'PATCH',

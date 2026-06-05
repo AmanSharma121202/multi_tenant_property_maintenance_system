@@ -35,7 +35,7 @@ public class TenantService {
         tenant.setTenantId(tenant.getId());
         tenant.setName(normalizedName);
         tenant.setCurrency(req.getCurrency().trim());
-        tenant.setBillingDate(req.getBillingDate());
+        tenant.setBillingDay(req.getBillingDay());
         tenant.setLateFeeType(req.getLateFeeType().trim());
         tenant.setLateFeeValue(req.getLateFeeValue());
         tenant.setAddress(req.getAddress() == null ? null : req.getAddress().trim());
@@ -54,7 +54,7 @@ public class TenantService {
         Tenant tenant = get(tenantId);
         if (req.getName()         != null) tenant.setName(req.getName());
         if (req.getCurrency()     != null) tenant.setCurrency(req.getCurrency());
-        if (req.getBillingDate()  != null) tenant.setBillingDate(req.getBillingDate());
+        if (req.getBillingDay()  != null) tenant.setBillingDay(req.getBillingDay());
         if (req.getLateFeeType()  != null) tenant.setLateFeeType(req.getLateFeeType());
         if (req.getLateFeeValue() != null) tenant.setLateFeeValue(req.getLateFeeValue());
         if (req.getAddress()      != null) tenant.setAddress(req.getAddress());

@@ -122,7 +122,7 @@ export function PaymentsPage() {
       )}
 
       <Modal
-        title={`Payment details — ${selected?.id ?? ''}`}
+        title="Payment details"
         open={!!selected}
         onClose={() => setSelected(null)}
       >

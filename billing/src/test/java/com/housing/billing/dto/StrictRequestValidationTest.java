@@ -125,7 +125,7 @@ class StrictRequestValidationTest {
         CreateTenantRequest req = new CreateTenantRequest();
         req.setName("Sunrise Residency");
         req.setCurrency("INR");
-        req.setBillingDate(LocalDate.of(2026, 4, 20));
+        req.setBillingDay(20);
         req.setLateFeeType("PERCENTAGE");
         req.setLateFeeValue(2.5);
         req.setAddress("Main Street");

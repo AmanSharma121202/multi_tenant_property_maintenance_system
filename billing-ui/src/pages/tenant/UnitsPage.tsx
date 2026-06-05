@@ -41,7 +41,7 @@ export function UnitsPage() {
   const [appliedFilter, setAppliedFilter] = useState('')
   const [modal, setModal] = useState<'create' | 'edit' | 'link' | 'details' | null>(null)
   const [selected, setSelected] = useState<Unit | null>(null)
-  const [form, setForm] = useState({ unitNumber: '', profileCode: '2BHK', active: true })
+  const [form, setForm] = useState({ unitNumber: '', profileCode: '2BHK', active: true, unitStartDate: '' })
   const [linkOwnerId, setLinkOwnerId] = useState('')
   const [saving, setSaving] = useState(false)
   const [paymentSaving, setPaymentSaving] = useState(false)
@@ -94,7 +94,7 @@ export function UnitsPage() {
     : PROFILE_CODES
 
   const openCreate = () => {
-    setForm({ unitNumber: '', profileCode: profileCodes[0] ?? '2BHK', active: true })
+    setForm({ unitNumber: '', profileCode: profileCodes[0] ?? '2BHK', active: true, unitStartDate: '' })
     setModal('create')
   }
 
@@ -104,6 +104,7 @@ export function UnitsPage() {
       unitNumber: unit.unitNumber,
       profileCode: unit.profileCode,
       active: unit.active,
+      unitStartDate: unit.unitStartDate ?? '',
     })
     setModal('edit')
   }
@@ -131,7 +132,10 @@ export function UnitsPage() {
     if (!tenantId) return
     setSaving(true)
     try {
-      const created = await createUnit(tenantId, form)
+      const created = await createUnit(tenantId, {
+        ...form,
+        unitStartDate: form.unitStartDate || undefined,
+      })
       setUnits((prev) => upsertById(prev, created))
       setModal(null)
     } catch (err) {
@@ -146,7 +150,10 @@ export function UnitsPage() {
     if (!tenantId || !selected) return
     setSaving(true)
     try {
-      const updated = await updateUnit(tenantId, selected.id, form)
+      const updated = await updateUnit(tenantId, selected.id, {
+        ...form,
+        unitStartDate: form.unitStartDate || undefined,
+      })
       setUnits((prev) => upsertById(prev, updated))
       setModal(null)
     } catch (err) {
@@ -373,6 +380,14 @@ export function UnitsPage() {
               onChange={(e) => setForm({ ...form, active: e.target.checked })}
             />
             Active
+          </label>
+          <label>
+            Unit start date
+            <input
+              type="date"
+              value={form.unitStartDate}
+              onChange={(e) => setForm({ ...form, unitStartDate: e.target.value })}
+            />
           </label>
           <div className="form-actions">
             <button type="button" className="btn" onClick={() => setModal(null)}>Cancel</button>

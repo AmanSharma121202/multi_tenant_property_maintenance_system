@@ -12,7 +12,7 @@ export function getTenant(tenantId: string) {
 export function createTenant(data: {
   name: string
   currency: string
-  billing_date: string
+  billing_day: number
   lateFeeType: string
   lateFeeValue: number
   address: string
@@ -28,7 +28,7 @@ export function updateTenant(
   data: Partial<{
     name: string
     currency: string
-    billing_date: string
+    billing_day: number
     lateFeeType: string
     lateFeeValue: number
     address: string
@@ -39,3 +39,4 @@ export function updateTenant(
     body: JSON.stringify(data),
   })
 }
+

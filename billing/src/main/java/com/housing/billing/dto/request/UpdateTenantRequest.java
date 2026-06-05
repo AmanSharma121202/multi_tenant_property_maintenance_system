@@ -1,15 +1,14 @@
 package com.housing.billing.dto.request;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.housing.billing.validation.AllowedConfigValue;
 import com.housing.billing.validation.AllowedValueType;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Data;
-
-import java.time.LocalDate;
 
 @Data
 public class UpdateTenantRequest {
@@ -22,10 +21,11 @@ public class UpdateTenantRequest {
     @AllowedConfigValue(type = AllowedValueType.CURRENCY, message = "currency must be one of configured validCurrency values")
     private String currency;
 
-    @Schema(example = "2026-04-20")
-    @JsonProperty("billing_date")
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
-    private LocalDate billingDate;
+    @Schema(example = "20")
+    @Min(value = 1, message = "billing_day must be between 1 and 31")
+    @Max(value = 31, message = "billing_day must be between 1 and 31")
+    @JsonProperty("billing_day")
+    private Integer billingDay;
 
     @Schema(example = "PERCENTAGE")
     @AllowedConfigValue(type = AllowedValueType.LATE_FEE_TYPE, message = "lateFeeType must be one of configured validLateFeeType values")
@@ -39,3 +39,4 @@ public class UpdateTenantRequest {
     @Pattern(regexp = "^$|.*\\S.*", message = "address cannot be blank")
     private String address;
 }
+

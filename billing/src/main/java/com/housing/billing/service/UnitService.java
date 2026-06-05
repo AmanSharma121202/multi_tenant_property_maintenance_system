@@ -90,6 +90,7 @@ public class UnitService {
         unit.setUnitNumber(normalizedUnitNumber);
         unit.setProfileCode(normalizedProfileCode);
         unit.setActive(req.isActive());
+        unit.setUnitStartDate(req.getUnitStartDate());
         unit.setDueAmount(BigDecimal.ZERO);
         unit.setUnitBalance(BigDecimal.ZERO);
         unit.setTotalBalance(BigDecimal.ZERO);
@@ -120,6 +121,7 @@ public class UnitService {
             unit.setProfileCode(normalizedProfileCode);
         }
         if (req.getActive()      != null) unit.setActive(req.getActive());
+        if (req.getUnitStartDate() != null) unit.setUnitStartDate(req.getUnitStartDate());
         unit.setUpdatedAt(Instant.now());
         modelValidationService.validate(unit);
         Unit saved = unitRepository.save(unit);

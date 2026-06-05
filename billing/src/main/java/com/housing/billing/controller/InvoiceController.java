@@ -75,6 +75,12 @@ public class InvoiceController {
         }
 
         LocalDate invoiceDate = target.atDay(1);
+        invoiceService.validateTenantInvoiceGeneration(
+                tenantId,
+                request.getYear(),
+                request.getMonth(),
+                request.getUnitId()
+        );
         String flowId = "manual-" + UUID.randomUUID();
 
         Map<String, String> response = new java.util.HashMap<>();
