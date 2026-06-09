@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { listPayments } from '../../api/payments'
 import { listUnits } from '../../api/units'
 import { ApiClientError } from '../../api/client'
@@ -7,8 +7,11 @@ import type { Payment, Unit } from '../../types'
 import { useLoadSequence } from '../../hooks/useLoadSequence'
 import { formatDate, formatMoney } from '../../utils/format'
 import { mergeListsById } from '../../utils/listState'
+import { ChipFilter } from '../../components/ChipFilter'
 import { Modal } from '../../components/Modal'
 import { RefreshButton } from '../../components/RefreshButton'
+import { buildFilterExpression } from '../../utils/filterExpression'
+import type { FilterChip } from '../../utils/filterFields'
 
 export function PaymentsPage() {
   const { tenantId } = useAuth()
@@ -16,8 +19,11 @@ export function PaymentsPage() {
   const [units, setUnits] = useState<Unit[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [filterInput, setFilterInput] = useState('')
-  const [appliedFilter, setAppliedFilter] = useState('')
+  const [filterChips, setFilterChips] = useState<FilterChip[]>([])
+  const appliedFilter = useMemo(
+    () => buildFilterExpression(filterChips, 'payment'),
+    [filterChips],
+  )
   const [selected, setSelected] = useState<Payment | null>(null)
   const { nextLoadId, isLatest } = useLoadSequence()
 
@@ -49,34 +55,18 @@ export function PaymentsPage() {
   const unitNumber = (unitId: string) =>
     units.find((u) => u.id === unitId)?.unitNumber ?? unitId
 
-  const applyFilter = (e: FormEvent) => {
-    e.preventDefault()
-    setAppliedFilter(filterInput.trim())
-  }
-
-  const clearFilter = () => {
-    setFilterInput('')
-    setAppliedFilter('')
-  }
-
   if (!tenantId) {
     return <div className="alert alert-error">No tenant assigned.</div>
   }
 
   return (
     <div className="page-section">
-      <div className="toolbar">
-        <p className="toolbar-meta">{payments.length} payment(s)</p>
-        <form className="filter-form" onSubmit={applyFilter}>
-          <input
-            value={filterInput}
-            onChange={(e) => setFilterInput(e.target.value)}
-            placeholder='Filter (e.g. method=="UPI" && amount>=500)'
-          />
-          <button type="submit" className="btn btn-sm">Apply</button>
-          <button type="button" className="btn btn-sm" onClick={clearFilter}>Clear</button>
-        </form>
-        <RefreshButton onClick={() => load()} disabled={loading} />
+      <div className="list-toolbar">
+        <div className="toolbar">
+          <p className="toolbar-meta">{payments.length} payment(s)</p>
+          <RefreshButton onClick={() => load()} disabled={loading} />
+        </div>
+        <ChipFilter model="payment" chips={filterChips} onChange={setFilterChips} />
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

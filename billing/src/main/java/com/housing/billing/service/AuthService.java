@@ -20,12 +20,18 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthMapper authMapper;
     private final ModelValidationService modelValidationService;
+    private final TenantStatusService tenantStatusService;
 
     public SignupResponse signup(SignupRequest req) {
         String normalizedEmail = req.getEmail().trim();
         userRepository.findByEmail(normalizedEmail).ifPresent(u -> {
             throw new IllegalStateException("Email already registered");
         });
+
+        String tenantId = req.getTenantId().trim();
+        if (!"superadmin".equals(tenantId)) {
+            tenantStatusService.requireActive(tenantId);
+        }
 
         User user = authMapper.toNewUser(req, passwordEncoder.encode(req.getPassword()));
         modelValidationService.validate(user);
@@ -49,6 +55,9 @@ public class AuthService {
 
         if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
             throw new AuthenticationFailedException("Invalid credentials");
+        }
+        if (!"superadmin".equals(user.getTenantId())) {
+            tenantStatusService.requireActive(user.getTenantId());
         }
         return user;
     }

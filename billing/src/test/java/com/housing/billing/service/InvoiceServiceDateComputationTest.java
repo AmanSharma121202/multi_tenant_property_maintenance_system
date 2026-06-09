@@ -47,6 +47,8 @@ class InvoiceServiceDateComputationTest {
     private DynamicFilterEngine dynamicFilterEngine;
     @Mock
     private ModelValidationService modelValidationService;
+    @Mock
+    private TenantStatusService tenantStatusService;
 
     @InjectMocks
     private InvoiceService invoiceService;

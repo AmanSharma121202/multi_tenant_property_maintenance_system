@@ -27,7 +27,9 @@ public class TenantService {
     public Tenant create(CreateTenantRequest req) {
         String normalizedName = req.getName().trim();
         tenantRepository.findByNameIgnoreCase(normalizedName).ifPresent(existing -> {
-            throw new IllegalStateException("Tenant already exists");
+            if (TenantStatusService.isActive(existing)) {
+                throw new IllegalStateException("Tenant already exists");
+            }
         });
 
         Tenant tenant = new Tenant();
@@ -39,6 +41,7 @@ public class TenantService {
         tenant.setLateFeeType(req.getLateFeeType().trim());
         tenant.setLateFeeValue(req.getLateFeeValue());
         tenant.setAddress(req.getAddress() == null ? null : req.getAddress().trim());
+        tenant.setStatus(Tenant.ACTIVE);
         tenant.setType("tenant");
         tenant.setCreatedAt(Instant.now());
         modelValidationService.validate(tenant);
@@ -46,8 +49,8 @@ public class TenantService {
     }
 
     public Tenant get(String tenantId) {
-        return tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new ResourceNotFoundException("Tenant not found"));
+        return normalizeLegacyStatus(tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant not found")));
     }
 
     public Tenant update(String tenantId, UpdateTenantRequest req) {
@@ -61,5 +64,39 @@ public class TenantService {
         tenant.setUpdatedAt(Instant.now());
         modelValidationService.validate(tenant);
         return tenantRepository.save(tenant);
+    }
+
+    public void delete(String tenantId) {
+        Tenant tenant = get(tenantId);
+        if (!TenantStatusService.isActive(tenant)) {
+            throw new IllegalStateException("Tenant is already inactive");
+        }
+        tenant.setStatus(Tenant.INACTIVE);
+        tenant.setUpdatedAt(Instant.now());
+        modelValidationService.validate(tenant);
+        tenantRepository.save(tenant);
+    }
+
+    public Tenant reactivate(String tenantId) {
+        Tenant tenant = get(tenantId);
+        if (TenantStatusService.isActive(tenant)) {
+            throw new IllegalStateException("Tenant is already active");
+        }
+        tenantRepository.findByNameIgnoreCase(tenant.getName()).ifPresent(existing -> {
+            if (!existing.getId().equals(tenant.getId()) && TenantStatusService.isActive(existing)) {
+                throw new IllegalStateException("Another active tenant already uses this name");
+            }
+        });
+        tenant.setStatus(Tenant.ACTIVE);
+        tenant.setUpdatedAt(Instant.now());
+        modelValidationService.validate(tenant);
+        return tenantRepository.save(tenant);
+    }
+
+    private Tenant normalizeLegacyStatus(Tenant tenant) {
+        if (tenant.getStatus() == null || tenant.getStatus().isBlank()) {
+            tenant.setStatus(Tenant.ACTIVE);
+        }
+        return tenant;
     }
 }

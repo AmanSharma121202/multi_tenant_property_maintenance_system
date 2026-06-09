@@ -96,6 +96,13 @@ public class GlobalExceptionHandler {
         return null;
     }
 
+    // 403 - Tenant inactive (soft deleted)
+    @ExceptionHandler(TenantInactiveException.class)
+    public ResponseEntity<ErrorResponse> handleTenantInactive(TenantInactiveException ex) {
+        return ResponseEntity.status(403)
+                .body(new ErrorResponse("TENANT_INACTIVE", ex.getMessage()));
+    }
+
     // 403 - User does not have permission
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccess(AccessDeniedException ex) {

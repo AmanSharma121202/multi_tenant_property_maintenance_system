@@ -39,6 +39,9 @@ class PaymentPatchValidationControllerTest {
     @MockitoBean
     private JwtAuthFilter jwtAuthFilter;
 
+    @MockitoBean
+    private com.housing.billing.service.TenantStatusService tenantStatusService;
+
     @Test
     void patchPayment_rejectsFinancialFieldAmount() throws Exception {
         String payload = """

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { generateTenantInvoices, listInvoices } from '../../api/invoices'
 import { listUnits } from '../../api/units'
@@ -8,8 +8,11 @@ import type { Invoice, Unit } from '../../types'
 import { useLoadSequence } from '../../hooks/useLoadSequence'
 import { formatMoney, monthName } from '../../utils/format'
 import { validateInvoiceGenerationPeriod } from '../../utils/invoiceValidation'
+import { ChipFilter } from '../../components/ChipFilter'
 import { Modal } from '../../components/Modal'
 import { RefreshButton } from '../../components/RefreshButton'
+import { buildFilterExpression } from '../../utils/filterExpression'
+import type { FilterChip } from '../../utils/filterFields'
 
 export function InvoicesPage() {
   const { tenantId } = useAuth()
@@ -18,8 +21,11 @@ export function InvoicesPage() {
   const [units, setUnits] = useState<Unit[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [filterInput, setFilterInput] = useState('')
-  const [appliedFilter, setAppliedFilter] = useState('')
+  const [filterChips, setFilterChips] = useState<FilterChip[]>([])
+  const chipFilter = useMemo(
+    () => buildFilterExpression(filterChips, 'invoice'),
+    [filterChips],
+  )
   const [generateOpen, setGenerateOpen] = useState(false)
   const [generateError, setGenerateError] = useState('')
   const [generateForm, setGenerateForm] = useState(() => {
@@ -35,20 +41,29 @@ export function InvoicesPage() {
 
   const unitFilterId = searchParams.get('unitId')
 
+  const unitFilterOptions = useMemo(
+    () => ({
+      unitId: units.map((u) => ({ value: u.id, label: u.unitNumber })),
+    }),
+    [units],
+  )
+
+  const appliedFilter = useMemo(() => {
+    const parts: string[] = []
+    if (unitFilterId) {
+      parts.push(`unitId=="${unitFilterId.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`)
+    }
+    if (chipFilter) parts.push(chipFilter)
+    return parts.join(' && ')
+  }, [unitFilterId, chipFilter])
+
   const load = useCallback(async () => {
     if (!tenantId) return
     const loadId = nextLoadId()
     setLoading(true)
     setError('')
     try {
-      const filterParts = [] as string[]
-      if (unitFilterId) {
-        filterParts.push(`unitId=="${unitFilterId}"`)
-      }
-      if (appliedFilter) {
-        filterParts.push(appliedFilter)
-      }
-      const filter = filterParts.length ? filterParts.join(' && ') : undefined
+      const filter = appliedFilter || undefined
       const [inv, u] = await Promise.all([
         listInvoices(tenantId, filter),
         listUnits(tenantId),
@@ -64,7 +79,7 @@ export function InvoicesPage() {
     } finally {
       if (isLatest(loadId)) setLoading(false)
     }
-  }, [tenantId, nextLoadId, isLatest, unitFilterId, appliedFilter])
+  }, [tenantId, nextLoadId, isLatest, appliedFilter])
 
   useEffect(() => {
     load()
@@ -72,16 +87,6 @@ export function InvoicesPage() {
 
   const unitNumber = (unitId: string) =>
     units.find((u) => u.id === unitId)?.unitNumber ?? unitId
-
-  const applyFilter = (e: FormEvent) => {
-    e.preventDefault()
-    setAppliedFilter(filterInput.trim())
-  }
-
-  const clearFilter = () => {
-    setFilterInput('')
-    setAppliedFilter('')
-  }
 
   const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
@@ -136,23 +141,22 @@ export function InvoicesPage() {
 
   return (
     <div className="page-section">
-      <div className="toolbar">
-        <p className="toolbar-meta">{invoices.length} invoice(s)</p>
-        <form className="filter-form" onSubmit={applyFilter}>
-          <input
-            value={filterInput}
-            onChange={(e) => setFilterInput(e.target.value)}
-            placeholder='Filter (e.g. status=="DUE" && year==2026 && month==5)'
-          />
-          <button type="submit" className="btn btn-sm">Apply</button>
-          <button type="button" className="btn btn-sm" onClick={clearFilter}>Clear</button>
-        </form>
-        <div className="toolbar-actions">
-          <RefreshButton onClick={() => load()} disabled={loading} />
-          <button type="button" className="btn btn-primary" onClick={openGenerateModal}>
-            Generate invoices
-          </button>
+      <div className="list-toolbar">
+        <div className="toolbar">
+          <p className="toolbar-meta">{invoices.length} invoice(s)</p>
+          <div className="toolbar-actions">
+            <RefreshButton onClick={() => load()} disabled={loading} />
+            <button type="button" className="btn btn-primary" onClick={openGenerateModal}>
+              Generate invoices
+            </button>
+          </div>
         </div>
+        <ChipFilter
+          model="invoice"
+          chips={filterChips}
+          onChange={setFilterChips}
+          dynamicOptions={unitFilterOptions}
+        />
       </div>
 
       {unitFilterId && (

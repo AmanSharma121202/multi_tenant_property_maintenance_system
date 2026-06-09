@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { listOwners } from '../../api/owners'
 import { listProfiles } from '../../api/profiles'
@@ -10,6 +10,7 @@ import {
   unlinkOwner,
   updateUnit,
 } from '../../api/units'
+import { ChipFilter } from '../../components/ChipFilter'
 import { Modal } from '../../components/Modal'
 import { RefreshButton } from '../../components/RefreshButton'
 import { ApiClientError } from '../../api/client'
@@ -20,11 +21,11 @@ import {
   mergeListsById,
   removeById,
   upsertById,
-  withoutInactive,
-  withoutInactiveOwners,
 } from '../../utils/listState'
 import { recordPayment } from '../../api/payments'
 import { formatMoney } from '../../utils/format'
+import { buildFilterExpression } from '../../utils/filterExpression'
+import type { FilterChip } from '../../utils/filterFields'
 
 const PROFILE_CODES = ['1BHK', '2BHK', '3BHK', 'VILLA']
 const PAYMENT_METHODS = ['CASH', 'BANK_TRANSFER', 'UPI', 'CHEQUE']
@@ -37,8 +38,47 @@ export function UnitsPage() {
   const [owners, setOwners] = useState<Owner[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [filterInput, setFilterInput] = useState('')
-  const [appliedFilter, setAppliedFilter] = useState('')
+  const [filterChips, setFilterChips] = useState<FilterChip[]>([])
+  const appliedFilter = useMemo(
+    () => buildFilterExpression(filterChips, 'unit'),
+    [filterChips],
+  )
+  const { nextLoadId, isLatest } = useLoadSequence()
+
+  const profileCodes = profiles.length
+    ? profiles.map((p) => p.code)
+    : PROFILE_CODES
+
+  const profileFilterOptions = useMemo(
+    () => ({
+      profileCode: profileCodes.map((code) => ({ value: code, label: code })),
+    }),
+    [profileCodes],
+  )
+
+  const load = useCallback(async () => {
+    if (!tenantId) return
+    const loadId = nextLoadId()
+    setLoading(true)
+    setError('')
+    try {
+      const [u, p, o] = await Promise.all([
+        listUnits(tenantId, appliedFilter || undefined),
+        listProfiles(tenantId),
+        listOwners(tenantId),
+      ])
+      if (!isLatest(loadId)) return
+      setUnits(u)
+      setProfiles((prev) => mergeListsById(p, prev))
+      setOwners((prev) => mergeListsById(o, prev))
+    } catch (err) {
+      if (!isLatest(loadId)) return
+      setError(err instanceof ApiClientError ? err.message : 'Failed to load units')
+    } finally {
+      if (isLatest(loadId)) setLoading(false)
+    }
+  }, [tenantId, nextLoadId, isLatest, appliedFilter])
+
   const [modal, setModal] = useState<'create' | 'edit' | 'link' | 'details' | null>(null)
   const [selected, setSelected] = useState<Unit | null>(null)
   const [form, setForm] = useState({ unitNumber: '', profileCode: '2BHK', active: true, unitStartDate: '' })
@@ -53,45 +93,10 @@ export function UnitsPage() {
     notes: '',
     paidBy: '',
   })
-  const { nextLoadId, isLatest } = useLoadSequence()
-
-  const load = useCallback(async () => {
-    if (!tenantId) return
-    const loadId = nextLoadId()
-    setLoading(true)
-    setError('')
-    try {
-      const [u, p, o] = await Promise.all([
-        listUnits(tenantId, appliedFilter || undefined),
-        listProfiles(tenantId),
-        listOwners(tenantId),
-      ])
-      if (!isLatest(loadId)) return
-      setUnits((prev) => {
-        if (appliedFilter) {
-          // When filtering, show exactly what the server returns (avoid merging in stale local rows).
-          return u
-        }
-        const merged = mergeListsById(u, prev)
-        return withoutInactive(merged)
-      })
-      setProfiles((prev) => withoutInactive(mergeListsById(p, prev)))
-      setOwners((prev) => withoutInactiveOwners(mergeListsById(o, prev)))
-    } catch (err) {
-      if (!isLatest(loadId)) return
-      setError(err instanceof ApiClientError ? err.message : 'Failed to load units')
-    } finally {
-      if (isLatest(loadId)) setLoading(false)
-    }
-  }, [tenantId, nextLoadId, isLatest, appliedFilter])
 
   useEffect(() => {
     load()
   }, [load])
-
-  const profileCodes = profiles.length
-    ? profiles.map((p) => p.code)
-    : PROFILE_CODES
 
   const openCreate = () => {
     setForm({ unitNumber: '', profileCode: profileCodes[0] ?? '2BHK', active: true, unitStartDate: '' })
@@ -248,16 +253,6 @@ export function UnitsPage() {
   const displayAmount = (value?: number | null) =>
     value == null ? '—' : formatMoney(Number(value))
 
-  const applyFilter = (e: FormEvent) => {
-    e.preventDefault()
-    setAppliedFilter(filterInput.trim())
-  }
-
-  const clearFilter = () => {
-    setFilterInput('')
-    setAppliedFilter('')
-  }
-
   if (!tenantId) {
     return (
       <div className="alert alert-error">
@@ -268,23 +263,22 @@ export function UnitsPage() {
 
   return (
     <div className="page-section">
-      <div className="toolbar">
-        <p className="toolbar-meta">{units.length} unit(s)</p>
-        <form className="filter-form" onSubmit={applyFilter}>
-          <input
-            value={filterInput}
-            onChange={(e) => setFilterInput(e.target.value)}
-            placeholder='Filter (e.g. unitNumber=="A-101" && active==true)'
-          />
-          <button type="submit" className="btn btn-sm">Apply</button>
-          <button type="button" className="btn btn-sm" onClick={clearFilter}>Clear</button>
-        </form>
-        <div className="toolbar-actions">
-          <RefreshButton onClick={() => load()} disabled={loading} />
-          <button type="button" className="btn btn-primary" onClick={openCreate}>
-            + Add unit
-          </button>
+      <div className="list-toolbar">
+        <div className="toolbar">
+          <p className="toolbar-meta">{units.length} unit(s)</p>
+          <div className="toolbar-actions">
+            <RefreshButton onClick={() => load()} disabled={loading} />
+            <button type="button" className="btn btn-primary" onClick={openCreate}>
+              + Add unit
+            </button>
+          </div>
         </div>
+        <ChipFilter
+          model="unit"
+          chips={filterChips}
+          onChange={setFilterChips}
+          dynamicOptions={profileFilterOptions}
+        />
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

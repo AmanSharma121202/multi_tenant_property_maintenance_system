@@ -39,6 +39,9 @@ class DeleteIdValidationControllerTest {
     @MockitoBean
     private JwtAuthFilter jwtAuthFilter;
 
+    @MockitoBean
+    private com.housing.billing.service.TenantStatusService tenantStatusService;
+
     @Test
     void deleteUnit_WithInvalidUnitIdFormat_Returns400() throws Exception {
         doThrow(new IllegalArgumentException("Invalid unitId format"))

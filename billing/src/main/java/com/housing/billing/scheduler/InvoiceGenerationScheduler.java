@@ -67,7 +67,7 @@ public class InvoiceGenerationScheduler {
 
         List<Tenant> tenants;
         try {
-            tenants = tenantRepository.findAllTenants();
+            tenants = tenantRepository.findActiveTenants();
         } catch (Exception ex) {
             log.error("Skipping tenant invoice scheduling for date={} because tenant query failed: {}",
                     today, rootMessage(ex));

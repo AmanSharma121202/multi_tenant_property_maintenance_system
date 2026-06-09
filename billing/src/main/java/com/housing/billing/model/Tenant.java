@@ -49,6 +49,12 @@ public class Tenant extends BaseDocument {
     @Pattern(regexp = "^$|.*\\S.*", message = "Address cannot be blank")
     private String address;
 
+    @Pattern(regexp = "^(ACTIVE|INACTIVE)$", message = "Status must be ACTIVE or INACTIVE")
+    private String status = ACTIVE;
+
+    public static final String ACTIVE = "ACTIVE";
+    public static final String INACTIVE = "INACTIVE";
+
     /**
      * Legacy field: reads the old "billing_date" field from Couchbase documents.
      * Read-only — not written back on save (only billing_day is persisted).

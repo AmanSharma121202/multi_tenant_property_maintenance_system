@@ -1,11 +1,14 @@
 package com.housing.billing.security;
 
+import com.housing.billing.service.TenantStatusService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.HandlerMapping;
 
@@ -14,14 +17,24 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @Slf4j
+@Component
+@RequiredArgsConstructor
 public class TenantGuard implements HandlerInterceptor {
+
+    private final TenantStatusService tenantStatusService;
 
     @Override
     @SuppressWarnings("unchecked")
     public boolean preHandle(HttpServletRequest req, HttpServletResponse res, Object handler) throws Exception {
 
-        // Only check tenant-scoped URLs
-        if (!req.getRequestURI().startsWith("/tenants/")) {
+        // Only check tenant-scoped URLs with nested resources (e.g. /tenants/{id}/units).
+        // Top-level /tenants/{id} is SUPERADMIN-only CRUD and handled by @PreAuthorize.
+        String uri = req.getRequestURI();
+        if (!uri.startsWith("/tenants/")) {
+            return true;
+        }
+        String afterPrefix = uri.substring("/tenants/".length());
+        if (!afterPrefix.contains("/")) {
             return true;
         }
 
@@ -66,6 +79,8 @@ public class TenantGuard implements HandlerInterceptor {
             // Use AccessDeniedException so the API consistently returns 403 FORBIDDEN.
             throw new AccessDeniedException("Tenant isolation violation");
         }
+
+        tenantStatusService.requireActive(pathTenantId);
 
         return true;
     }

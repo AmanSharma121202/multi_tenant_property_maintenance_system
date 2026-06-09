@@ -18,6 +18,12 @@ public interface TenantRepository extends CouchbaseRepository<Tenant, String> {
 
     @Query("SELECT META().id AS __id, META().cas AS __cas, t.*" +
             " FROM `prop-tax`.`main`.`tenants` t" +
+            " WHERE t.type = 'tenant'" +
+            " AND (t.status IS MISSING OR t.status IS NULL OR t.status = 'ACTIVE')")
+    List<Tenant> findActiveTenants();
+
+    @Query("SELECT META().id AS __id, META().cas AS __cas, t.*" +
+            " FROM `prop-tax`.`main`.`tenants` t" +
             " WHERE LOWER(t.name) = LOWER($1) LIMIT 1")
     Optional<Tenant> findByNameIgnoreCase(String name);
 }

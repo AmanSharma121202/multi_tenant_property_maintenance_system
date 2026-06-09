@@ -39,6 +39,9 @@ class StrictJsonTypeValidationControllerTest {
     @MockitoBean
     private JwtAuthFilter jwtAuthFilter;
 
+    @MockitoBean
+    private com.housing.billing.service.TenantStatusService tenantStatusService;
+
     @Test
     void createProfile_rejectsQuotedNumberAndBooleanTypes() throws Exception {
         String payload = """

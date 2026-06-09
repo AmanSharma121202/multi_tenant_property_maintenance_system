@@ -1,17 +1,20 @@
 package com.housing.billing.config;
 
 import com.housing.billing.security.TenantGuard;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
+@RequiredArgsConstructor
 public class WebMvcConfig implements WebMvcConfigurer {
+
+    private final TenantGuard tenantGuard;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-
-        registry.addInterceptor(new TenantGuard())
-                .addPathPatterns("/tenants/**");  // protect all tenant scoped routes
+        registry.addInterceptor(tenantGuard)
+                .addPathPatterns("/tenants/**");
     }
 }

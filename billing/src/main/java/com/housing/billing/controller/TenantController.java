@@ -8,6 +8,7 @@ import com.housing.billing.service.TenantService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/tenants")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('SUPERADMIN')")
 public class TenantController {
     private final TenantService tenantService;
 
@@ -39,5 +41,18 @@ public class TenantController {
                                          @Valid @RequestBody UpdateTenantRequest req) {
         tenantId = TenantIdNormalizer.normalize(tenantId);
         return ResponseEntity.ok(tenantService.update(tenantId, req));
+    }
+
+    @DeleteMapping("/{tenantId}")
+    public ResponseEntity<Void> delete(@PathVariable String tenantId) {
+        tenantId = TenantIdNormalizer.normalize(tenantId);
+        tenantService.delete(tenantId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{tenantId}/reactivate")
+    public ResponseEntity<Tenant> reactivate(@PathVariable String tenantId) {
+        tenantId = TenantIdNormalizer.normalize(tenantId);
+        return ResponseEntity.ok(tenantService.reactivate(tenantId));
     }
 }

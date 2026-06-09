@@ -20,13 +20,16 @@ public class AsyncInvoiceGenerationService {
     private final UnitRepository unitRepository;
     private final InvoiceService invoiceService;
     private final InvoiceRepository invoiceRepository;
+    private final TenantStatusService tenantStatusService;
 
     public AsyncInvoiceGenerationService(UnitRepository unitRepository,
                                          InvoiceService invoiceService,
-                                         InvoiceRepository invoiceRepository) {
+                                         InvoiceRepository invoiceRepository,
+                                         TenantStatusService tenantStatusService) {
         this.unitRepository = unitRepository;
         this.invoiceService = invoiceService;
         this.invoiceRepository = invoiceRepository;
+        this.tenantStatusService = tenantStatusService;
     }
 
     public TenantInvoiceGenerationResult scheduleTenantInvoiceGeneration(
@@ -53,6 +56,7 @@ public class AsyncInvoiceGenerationService {
         }
 
         try {
+            tenantStatusService.requireActive(tenantId);
             return generateForTenantUnits(tenantId, invoiceDate, safeFlowId, safeUnitId);
         } catch (Exception ex) {
             log.error("Tenant invoice generation task crashed: flowId={} tenant={} unitId={} billingDate={} reason={}",

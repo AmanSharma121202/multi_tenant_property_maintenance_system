@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   createProfile,
   deleteProfile,
   listProfiles,
   updateProfile,
 } from '../../api/profiles'
+import { ChipFilter } from '../../components/ChipFilter'
 import { Modal } from '../../components/Modal'
 import { RefreshButton } from '../../components/RefreshButton'
 import { ApiClientError } from '../../api/client'
@@ -13,11 +14,11 @@ import type { Profile } from '../../types'
 import { formatMoney } from '../../utils/format'
 import { useLoadSequence } from '../../hooks/useLoadSequence'
 import {
-  mergeListsById,
   removeById,
   upsertById,
-  withoutInactive,
 } from '../../utils/listState'
+import { buildFilterExpression } from '../../utils/filterExpression'
+import type { FilterChip } from '../../utils/filterFields'
 
 const PROFILE_CODES = ['1BHK', '2BHK', '3BHK', 'VILLA']
 
@@ -26,8 +27,11 @@ export function ProfilesPage() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [filterInput, setFilterInput] = useState('')
-  const [appliedFilter, setAppliedFilter] = useState('')
+  const [filterChips, setFilterChips] = useState<FilterChip[]>([])
+  const appliedFilter = useMemo(
+    () => buildFilterExpression(filterChips, 'profile'),
+    [filterChips],
+  )
   const [modal, setModal] = useState<'create' | 'edit' | null>(null)
   const [selected, setSelected] = useState<Profile | null>(null)
   const [form, setForm] = useState({
@@ -47,14 +51,7 @@ export function ProfilesPage() {
     try {
       const data = await listProfiles(tenantId, appliedFilter || undefined)
       if (!isLatest(loadId)) return
-      setProfiles((prev) => {
-        if (appliedFilter) {
-          // When filtering, show exactly what the server returns (avoid merging in stale local rows).
-          return data
-        }
-        const merged = mergeListsById(data, prev)
-        return withoutInactive(merged)
-      })
+      setProfiles(data)
     } catch (err) {
       if (!isLatest(loadId)) return
       setError(err instanceof ApiClientError ? err.message : 'Failed to load profiles')
@@ -124,39 +121,23 @@ export function ProfilesPage() {
     }
   }
 
-  const applyFilter = (e: FormEvent) => {
-    e.preventDefault()
-    setAppliedFilter(filterInput.trim())
-  }
-
-  const clearFilter = () => {
-    setFilterInput('')
-    setAppliedFilter('')
-  }
-
   if (!tenantId) {
     return <div className="alert alert-error">No tenant assigned.</div>
   }
 
   return (
     <div className="page-section">
-      <div className="toolbar">
-        <p className="toolbar-meta">{profiles.length} profile(s)</p>
-        <form className="filter-form" onSubmit={applyFilter}>
-          <input
-            value={filterInput}
-            onChange={(e) => setFilterInput(e.target.value)}
-            placeholder='Filter (e.g. code=="2BHK" && active==true)'
-          />
-          <button type="submit" className="btn btn-sm">Apply</button>
-          <button type="button" className="btn btn-sm" onClick={clearFilter}>Clear</button>
-        </form>
-        <div className="toolbar-actions">
-          <RefreshButton onClick={() => load()} disabled={loading} />
-          <button type="button" className="btn btn-primary" onClick={openCreate}>
-            + Add profile
-          </button>
+      <div className="list-toolbar">
+        <div className="toolbar">
+          <p className="toolbar-meta">{profiles.length} profile(s)</p>
+          <div className="toolbar-actions">
+            <RefreshButton onClick={() => load()} disabled={loading} />
+            <button type="button" className="btn btn-primary" onClick={openCreate}>
+              + Add profile
+            </button>
+          </div>
         </div>
+        <ChipFilter model="profile" chips={filterChips} onChange={setFilterChips} />
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

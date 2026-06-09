@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { listUnits } from '../../api/units'
 import {
   createOwner,
@@ -8,6 +8,7 @@ import {
   unlinkUnit,
   updateOwner,
 } from '../../api/owners'
+import { ChipFilter } from '../../components/ChipFilter'
 import { Modal } from '../../components/Modal'
 import { RefreshButton } from '../../components/RefreshButton'
 import { ApiClientError } from '../../api/client'
@@ -18,8 +19,9 @@ import {
   mergeListsById,
   removeById,
   upsertById,
-  withoutInactiveOwners,
 } from '../../utils/listState'
+import { buildFilterExpression } from '../../utils/filterExpression'
+import type { FilterChip } from '../../utils/filterFields'
 
 export function OwnersPage() {
   const { tenantId } = useAuth()
@@ -27,8 +29,11 @@ export function OwnersPage() {
   const [units, setUnits] = useState<Unit[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [filterInput, setFilterInput] = useState('')
-  const [appliedFilter, setAppliedFilter] = useState('')
+  const [filterChips, setFilterChips] = useState<FilterChip[]>([])
+  const appliedFilter = useMemo(
+    () => buildFilterExpression(filterChips, 'owner'),
+    [filterChips],
+  )
   const [modal, setModal] = useState<'create' | 'edit' | 'link' | null>(null)
   const [selected, setSelected] = useState<Owner | null>(null)
   const [form, setForm] = useState({
@@ -52,14 +57,7 @@ export function OwnersPage() {
         listUnits(tenantId),
       ])
       if (!isLatest(loadId)) return
-      setOwners((prev) => {
-        if (appliedFilter) {
-          // When filtering, show exactly what the server returns (avoid merging in stale local rows).
-          return o
-        }
-        const merged = mergeListsById(o, prev)
-        return withoutInactiveOwners(merged)
-      })
+      setOwners(o)
       setUnits((prev) => mergeListsById(u, prev))
     } catch (err) {
       if (!isLatest(loadId)) return
@@ -169,39 +167,23 @@ export function OwnersPage() {
   const unitLabel = (id: string) =>
     units.find((u) => u.id === id)?.unitNumber ?? id
 
-  const applyFilter = (e: FormEvent) => {
-    e.preventDefault()
-    setAppliedFilter(filterInput.trim())
-  }
-
-  const clearFilter = () => {
-    setFilterInput('')
-    setAppliedFilter('')
-  }
-
   if (!tenantId) {
     return <div className="alert alert-error">No tenant assigned.</div>
   }
 
   return (
     <div className="page-section">
-      <div className="toolbar">
-        <p className="toolbar-meta">{owners.length} owner(s)</p>
-        <form className="filter-form" onSubmit={applyFilter}>
-          <input
-            value={filterInput}
-            onChange={(e) => setFilterInput(e.target.value)}
-            placeholder='Filter (e.g. status=="ACTIVE" && email=="a@b.com")'
-          />
-          <button type="submit" className="btn btn-sm">Apply</button>
-          <button type="button" className="btn btn-sm" onClick={clearFilter}>Clear</button>
-        </form>
-        <div className="toolbar-actions">
-          <RefreshButton onClick={() => load()} disabled={loading} />
-          <button type="button" className="btn btn-primary" onClick={openCreate}>
-            + Add owner
-          </button>
+      <div className="list-toolbar">
+        <div className="toolbar">
+          <p className="toolbar-meta">{owners.length} owner(s)</p>
+          <div className="toolbar-actions">
+            <RefreshButton onClick={() => load()} disabled={loading} />
+            <button type="button" className="btn btn-primary" onClick={openCreate}>
+              + Add owner
+            </button>
+          </div>
         </div>
+        <ChipFilter model="owner" chips={filterChips} onChange={setFilterChips} />
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

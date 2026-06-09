@@ -44,6 +44,7 @@ public class InvoiceService {
     private final TenantRepository tenantRepository;
     private final DynamicFilterEngine dynamicFilterEngine;
     private final ModelValidationService modelValidationService;
+    private final TenantStatusService tenantStatusService;
 
     private static final Set<String> FILTERABLE_FIELDS = Set.of(
             "year", "month", "status", "issueDate", "dueDate", "unitId"
@@ -60,6 +61,7 @@ public class InvoiceService {
 
 
     public void validateTenantInvoiceGeneration(String tenantId, int year, int month, String unitId) {
+        tenantStatusService.requireActive(tenantId);
         LocalDate cycleStart = LocalDate.of(year, month, 1);
         List<Unit> units;
         if (unitId != null && !unitId.isBlank()) {

@@ -34,6 +34,8 @@ class AsyncInvoiceGenerationServiceTest {
     private UnitRepository unitRepository;
     @Mock
     private InvoiceRepository invoiceRepository;
+    @Mock
+    private TenantStatusService tenantStatusService;
 
     @Test
     void scheduleTenantInvoiceGeneration_generatesInvoicesForAllTenantUnits() {
@@ -46,7 +48,8 @@ class AsyncInvoiceGenerationServiceTest {
         AsyncInvoiceGenerationService service = new AsyncInvoiceGenerationService(
                 unitRepository,
                 invoiceService,
-                invoiceRepository
+                invoiceRepository,
+                tenantStatusService
         );
 
         LocalDate invoiceDate = LocalDate.of(2026, 4, 20);
@@ -75,7 +78,8 @@ class AsyncInvoiceGenerationServiceTest {
         AsyncInvoiceGenerationService service = new AsyncInvoiceGenerationService(
                 unitRepository,
                 invoiceService,
-                invoiceRepository
+                invoiceRepository,
+                tenantStatusService
         );
 
         service.scheduleTenantInvoiceGeneration("tenant::1", LocalDate.of(2026, 4, 20), Duration.ZERO);
@@ -92,7 +96,8 @@ class AsyncInvoiceGenerationServiceTest {
         AsyncInvoiceGenerationService service = new AsyncInvoiceGenerationService(
                 unitRepository,
                 invoiceService,
-                invoiceRepository
+                invoiceRepository,
+                tenantStatusService
         );
 
         service.scheduleTenantInvoiceGeneration("tenant::1", LocalDate.of(2026, 4, 20), Duration.ZERO);
@@ -111,7 +116,8 @@ class AsyncInvoiceGenerationServiceTest {
         AsyncInvoiceGenerationService service = new AsyncInvoiceGenerationService(
                 unitRepository,
                 invoiceService,
-                invoiceRepository
+                invoiceRepository,
+                tenantStatusService
         );
 
         service.scheduleTenantInvoiceGeneration("tenant::1", LocalDate.of(2026, 4, 20), Duration.ZERO, "flow-1", "unit::101");

@@ -40,3 +40,15 @@ export function updateTenant(
   })
 }
 
+export function deleteTenant(tenantId: string) {
+  return apiRequest<void>(`/tenants/${tenantId}`, {
+    method: 'DELETE',
+  })
+}
+
+export function reactivateTenant(tenantId: string) {
+  return apiRequest<Tenant>(`/tenants/${tenantId}/reactivate`, {
+    method: 'POST',
+  })
+}
+

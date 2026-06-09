@@ -33,6 +33,7 @@ export interface Tenant {
   lateFeeType: string
   lateFeeValue: number
   address: string
+  status?: 'ACTIVE' | 'INACTIVE'
   tenantId?: string
   createdAt?: string
   updatedAt?: string

@@ -50,7 +50,7 @@ class InvoiceGenerationSchedulerTest {
 		Tenant dueTenant = tenant("tenant::1", today);
 		Tenant futureTenant = tenant("tenant::2", today.plusDays(1));
 
-		when(tenantRepository.findAllTenants()).thenReturn(List.of(dueTenant, futureTenant));
+        when(tenantRepository.findActiveTenants()).thenReturn(List.of(dueTenant, futureTenant));
 
 		scheduler.scheduleTenantInvoices();
 
@@ -64,7 +64,7 @@ class InvoiceGenerationSchedulerTest {
 
 		LocalDate today = LocalDate.now();
 		Tenant dueTenant = tenant("tenant::1", today);
-		when(tenantRepository.findAllTenants()).thenReturn(List.of(dueTenant));
+		when(tenantRepository.findActiveTenants()).thenReturn(List.of(dueTenant));
 
 		scheduler.scheduleTenantInvoices();
 		scheduler.scheduleTenantInvoices();
@@ -78,7 +78,7 @@ class InvoiceGenerationSchedulerTest {
 		ReflectionTestUtils.setField(scheduler, "kafkaEnabled", true);
 
 		LocalDate today = LocalDate.now();
-		when(tenantRepository.findAllTenants()).thenReturn(List.of(tenant("tenant::1", today)));
+		when(tenantRepository.findActiveTenants()).thenReturn(List.of(tenant("tenant::1", today)));
 
 		scheduler.scheduleTenantInvoices();
 
@@ -92,7 +92,7 @@ class InvoiceGenerationSchedulerTest {
 
 		LocalDate today = LocalDate.now();
 		Tenant monthlyTenant = tenant("tenant::1", LocalDate.of(2020, 1, today.getDayOfMonth()));
-		when(tenantRepository.findAllTenants()).thenReturn(List.of(monthlyTenant));
+		when(tenantRepository.findActiveTenants()).thenReturn(List.of(monthlyTenant));
 
 		scheduler.scheduleTenantInvoices();
 
@@ -105,7 +105,7 @@ class InvoiceGenerationSchedulerTest {
 		ReflectionTestUtils.setField(scheduler, "kafkaEnabled", false);
 
 		LocalDate today = LocalDate.now();
-		when(tenantRepository.findAllTenants()).thenReturn(List.of(tenant("tenant::1", today)));
+		when(tenantRepository.findActiveTenants()).thenReturn(List.of(tenant("tenant::1", today)));
 
 		scheduler.scheduleTenantInvoices();
 
@@ -127,7 +127,7 @@ class InvoiceGenerationSchedulerTest {
 		// (based on day-of-month) reliably treats it as due.
 		int daysBack = Math.min(2, Math.max(0, today.getDayOfMonth() - 1));
 		Tenant pastDueTenant = tenant("tenant::1", today.minusDays(daysBack));
-		when(tenantRepository.findAllTenants()).thenReturn(List.of(pastDueTenant));
+		when(tenantRepository.findActiveTenants()).thenReturn(List.of(pastDueTenant));
 
 		scheduler.scheduleTenantInvoices();
 
@@ -139,7 +139,7 @@ class InvoiceGenerationSchedulerTest {
 		ReflectionTestUtils.setField(scheduler, "tenantTimezone", "UTC");
 		ReflectionTestUtils.setField(scheduler, "kafkaEnabled", true);
 
-		when(tenantRepository.findAllTenants()).thenThrow(new RuntimeException("db down"));
+        when(tenantRepository.findActiveTenants()).thenThrow(new RuntimeException("db down"));
 
 		assertDoesNotThrow(() -> scheduler.scheduleTenantInvoices());
 
@@ -154,7 +154,7 @@ class InvoiceGenerationSchedulerTest {
 		LocalDate today = LocalDate.now();
 		Tenant failingTenant = tenant("tenant::1", today);
 		Tenant healthyTenant = tenant("tenant::2", today);
-		when(tenantRepository.findAllTenants()).thenReturn(List.of(failingTenant, healthyTenant));
+		when(tenantRepository.findActiveTenants()).thenReturn(List.of(failingTenant, healthyTenant));
 		doThrow(new RuntimeException("publish failed"))
 				.doNothing()
 				.when(invoiceFlowEventPublisher)
@@ -171,7 +171,7 @@ class InvoiceGenerationSchedulerTest {
 		ReflectionTestUtils.setField(scheduler, "kafkaEnabled", true);
 
 		LocalDate today = LocalDate.now();
-		when(tenantRepository.findAllTenants()).thenReturn(List.of(tenant("tenant::1", today)));
+		when(tenantRepository.findActiveTenants()).thenReturn(List.of(tenant("tenant::1", today)));
 
 		scheduler.scheduleTenantInvoices();
 
@@ -189,7 +189,7 @@ class InvoiceGenerationSchedulerTest {
 		Tenant legacyTenant = new Tenant();
 		legacyTenant.setId("tenant::legacy");
 		ReflectionTestUtils.setField(legacyTenant, "legacyBillingDate", today);
-		when(tenantRepository.findAllTenants()).thenReturn(List.of(legacyTenant));
+		when(tenantRepository.findActiveTenants()).thenReturn(List.of(legacyTenant));
 
 		scheduler.scheduleTenantInvoices();
 

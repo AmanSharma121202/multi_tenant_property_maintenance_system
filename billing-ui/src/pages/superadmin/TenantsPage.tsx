@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { createTenant, listTenants, updateTenant } from '../../api/tenants'
+import { createTenant, deleteTenant, listTenants, reactivateTenant, updateTenant } from '../../api/tenants'
 import { Modal } from '../../components/Modal'
 import { ApiClientError } from '../../api/client'
 import type { Tenant } from '../../types'
@@ -26,6 +26,10 @@ export function TenantsPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState(emptyCreate)
   const [saving, setSaving] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<Tenant | null>(null)
+  const [reactivateTarget, setReactivateTarget] = useState<Tenant | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [reactivating, setReactivating] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -92,6 +96,46 @@ export function TenantsPage() {
     }
   }
 
+  const tenantStatus = (tenant: Tenant) => tenant.status ?? 'ACTIVE'
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    setError('')
+    try {
+      await deleteTenant(deleteTarget.id)
+      setTenants((prev) =>
+        prev.map((t) =>
+          t.id === deleteTarget.id ? { ...t, status: 'INACTIVE' } : t,
+        ),
+      )
+      if (selected?.id === deleteTarget.id) {
+        setSelected((prev) => (prev ? { ...prev, status: 'INACTIVE' } : prev))
+      }
+      setDeleteTarget(null)
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Delete failed')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleReactivate = async () => {
+    if (!reactivateTarget) return
+    setReactivating(true)
+    setError('')
+    try {
+      const updated = await reactivateTenant(reactivateTarget.id)
+      setTenants((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
+      if (selected?.id === updated.id) setSelected(updated)
+      setReactivateTarget(null)
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Reactivate failed')
+    } finally {
+      setReactivating(false)
+    }
+  }
+
   return (
     <div className="page-section">
       <div className="toolbar">
@@ -112,6 +156,7 @@ export function TenantsPage() {
               <tr>
                 <th>Name</th>
                 <th>ID</th>
+                <th>Status</th>
                 <th>Currency</th>
                 <th>Billing day</th>
                 <th>Late fee</th>
@@ -123,19 +168,41 @@ export function TenantsPage() {
                 <tr key={t.id}>
                   <td><strong>{t.name}</strong></td>
                   <td><code className="code-sm">{t.id}</code></td>
+                  <td>
+                    <span className={`badge ${tenantStatus(t) === 'ACTIVE' ? 'badge-success' : 'badge-muted'}`}>
+                      {tenantStatus(t)}
+                    </span>
+                  </td>
                   <td>{t.currency}</td>
                   <td>{formatOrdinalDay(tenantBillingDay(t))} of every month</td>
                   <td>{t.lateFeeType} ({t.lateFeeValue})</td>
-                  <td>
+                  <td className="actions-cell">
                     <button type="button" className="btn btn-sm" onClick={() => openDetail(t)}>
                       View / Edit
                     </button>
+                    {tenantStatus(t) === 'ACTIVE' ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-danger"
+                        onClick={() => setDeleteTarget(t)}
+                      >
+                        Deactivate
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        onClick={() => setReactivateTarget(t)}
+                      >
+                        Reactivate
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
               {tenants.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="empty-cell">No tenants yet. Create one to get started.</td>
+                  <td colSpan={7} className="empty-cell">No tenants yet. Create one to get started.</td>
                 </tr>
               )}
             </tbody>
@@ -160,6 +227,10 @@ export function TenantsPage() {
             <label>
               ID
               <input value={selected.id} readOnly className="readonly" />
+            </label>
+            <label>
+              Status
+              <input value={tenantStatus(selected)} readOnly className="readonly" />
             </label>
             <label>
               Name
@@ -226,7 +297,24 @@ export function TenantsPage() {
               <button type="button" className="btn" onClick={() => setSelected(null)}>
                 Cancel
               </button>
-              <button type="submit" className="btn btn-primary" disabled={saving}>
+              {tenantStatus(selected) === 'ACTIVE' ? (
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => setDeleteTarget(selected)}
+                >
+                  Deactivate tenant
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setReactivateTarget(selected)}
+                >
+                  Reactivate tenant
+                </button>
+              )}
+              <button type="submit" className="btn btn-primary" disabled={saving || tenantStatus(selected) !== 'ACTIVE'}>
                 {saving ? 'Saving…' : 'Save changes'}
               </button>
             </div>
@@ -314,6 +402,53 @@ export function TenantsPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        title="Deactivate tenant"
+        open={!!deleteTarget}
+        onClose={() => !deleting && setDeleteTarget(null)}
+      >
+        {deleteTarget && (
+          <div className="form-stack">
+            <p>
+              Deactivate <strong>{deleteTarget.name}</strong>? Units, profiles, and invoices will
+              remain stored but tenant users will lose access. Login, invoice generation, and
+              payments will be blocked.
+            </p>
+            <div className="form-actions">
+              <button type="button" className="btn" disabled={deleting} onClick={() => setDeleteTarget(null)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-danger" disabled={deleting} onClick={handleDelete}>
+                {deleting ? 'Deactivating…' : 'Deactivate tenant'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title="Reactivate tenant"
+        open={!!reactivateTarget}
+        onClose={() => !reactivating && setReactivateTarget(null)}
+      >
+        {reactivateTarget && (
+          <div className="form-stack">
+            <p>
+              Reactivate <strong>{reactivateTarget.name}</strong>? Tenant users will regain access,
+              and billing operations will resume.
+            </p>
+            <div className="form-actions">
+              <button type="button" className="btn" disabled={reactivating} onClick={() => setReactivateTarget(null)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-primary" disabled={reactivating} onClick={handleReactivate}>
+                {reactivating ? 'Reactivating…' : 'Reactivate tenant'}
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )

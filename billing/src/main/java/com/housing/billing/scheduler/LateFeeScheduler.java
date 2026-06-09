@@ -29,7 +29,7 @@ public class LateFeeScheduler {
         log.info("Running late fee scheduler...");
         final Instant now = Instant.now();
 
-        tenantRepository.findAllTenants().forEach(tenant -> {
+        tenantRepository.findActiveTenants().forEach(tenant -> {
             invoiceRepository.findOverdueByTenantId(tenant.getId(), now)
                     .forEach(inv -> applyFeeForTenant(inv, tenant, now));
         });
