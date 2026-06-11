@@ -37,4 +37,9 @@ public interface InvoiceRepository extends CouchbaseRepository<Invoice, String> 
             " FROM `prop-tax`.`main`.`invoices` i" +
             " WHERE i.tenantId = $1 AND i.status != 'PAID' AND i.dueDate IS NOT MISSING AND i.dueDate < $2")
     List<Invoice> findOverdueByTenantId(String tenantId, Instant now);
+
+    @Query("SELECT META().id AS __id, META().cas AS __cas, i.*" +
+            " FROM `prop-tax`.`main`.`invoices` i" +
+            " WHERE i.tenantId = $1 AND i.status != 'PAID'")
+    List<Invoice> findUnpaidByTenantId(String tenantId);
 }

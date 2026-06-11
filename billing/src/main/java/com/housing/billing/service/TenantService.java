@@ -4,6 +4,7 @@ import com.housing.billing.dto.request.CreateTenantRequest;
 import com.housing.billing.dto.request.UpdateTenantRequest;
 import com.housing.billing.exception.ResourceNotFoundException;
 import com.housing.billing.model.Tenant;
+import com.housing.billing.repository.InvoiceRepository;
 import com.housing.billing.repository.TenantRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,7 @@ import java.util.UUID;
 public class TenantService {
 
     private final TenantRepository tenantRepository;
+    private final InvoiceRepository invoiceRepository;
     private final ModelValidationService modelValidationService;
 
 
@@ -70,6 +72,12 @@ public class TenantService {
         Tenant tenant = get(tenantId);
         if (!TenantStatusService.isActive(tenant)) {
             throw new IllegalStateException("Tenant is already inactive");
+        }
+        long unpaidCount = invoiceRepository.findUnpaidByTenantId(tenantId).size();
+        if (unpaidCount > 0) {
+            throw new IllegalStateException(
+                    "Cannot deactivate tenant: " + unpaidCount + " unpaid invoice(s) must be settled first"
+            );
         }
         tenant.setStatus(Tenant.INACTIVE);
         tenant.setUpdatedAt(Instant.now());

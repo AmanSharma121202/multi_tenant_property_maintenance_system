@@ -29,6 +29,7 @@ export function TenantsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Tenant | null>(null)
   const [reactivateTarget, setReactivateTarget] = useState<Tenant | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [reactivating, setReactivating] = useState(false)
 
   const load = useCallback(async () => {
@@ -98,10 +99,15 @@ export function TenantsPage() {
 
   const tenantStatus = (tenant: Tenant) => tenant.status ?? 'ACTIVE'
 
+  const openDelete = (tenant: Tenant) => {
+    setDeleteError('')
+    setDeleteTarget(tenant)
+  }
+
   const handleDelete = async () => {
     if (!deleteTarget) return
     setDeleting(true)
-    setError('')
+    setDeleteError('')
     try {
       await deleteTenant(deleteTarget.id)
       setTenants((prev) =>
@@ -114,7 +120,7 @@ export function TenantsPage() {
       }
       setDeleteTarget(null)
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Delete failed')
+      setDeleteError(err instanceof ApiClientError ? err.message : 'Deactivate failed')
     } finally {
       setDeleting(false)
     }
@@ -184,7 +190,7 @@ export function TenantsPage() {
                       <button
                         type="button"
                         className="btn btn-sm btn-danger"
-                        onClick={() => setDeleteTarget(t)}
+                        onClick={() => openDelete(t)}
                       >
                         Deactivate
                       </button>
@@ -301,7 +307,7 @@ export function TenantsPage() {
                 <button
                   type="button"
                   className="btn btn-danger"
-                  onClick={() => setDeleteTarget(selected)}
+                  onClick={() => openDelete(selected)}
                 >
                   Deactivate tenant
                 </button>
@@ -407,17 +413,30 @@ export function TenantsPage() {
       <Modal
         title="Deactivate tenant"
         open={!!deleteTarget}
-        onClose={() => !deleting && setDeleteTarget(null)}
+        onClose={() => {
+          if (deleting) return
+          setDeleteError('')
+          setDeleteTarget(null)
+        }}
       >
         {deleteTarget && (
           <div className="form-stack">
+            {deleteError && <div className="alert alert-error">{deleteError}</div>}
             <p>
               Deactivate <strong>{deleteTarget.name}</strong>? Units, profiles, and invoices will
               remain stored but tenant users will lose access. Login, invoice generation, and
               payments will be blocked.
             </p>
             <div className="form-actions">
-              <button type="button" className="btn" disabled={deleting} onClick={() => setDeleteTarget(null)}>
+              <button
+                type="button"
+                className="btn"
+                disabled={deleting}
+                onClick={() => {
+                  setDeleteError('')
+                  setDeleteTarget(null)
+                }}
+              >
                 Cancel
               </button>
               <button type="button" className="btn btn-danger" disabled={deleting} onClick={handleDelete}>

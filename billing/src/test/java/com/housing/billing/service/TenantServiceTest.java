@@ -1,6 +1,8 @@
 package com.housing.billing.service;
 
+import com.housing.billing.model.Invoice;
 import com.housing.billing.model.Tenant;
+import com.housing.billing.repository.InvoiceRepository;
 import com.housing.billing.repository.TenantRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -8,6 +10,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -24,6 +27,8 @@ class TenantServiceTest {
     @Mock
     private TenantRepository tenantRepository;
     @Mock
+    private InvoiceRepository invoiceRepository;
+    @Mock
     private ModelValidationService modelValidationService;
 
     @InjectMocks
@@ -33,12 +38,26 @@ class TenantServiceTest {
     void delete_softDeletesActiveTenant() {
         Tenant tenant = activeTenant("tenant::1");
         when(tenantRepository.findById("tenant::1")).thenReturn(Optional.of(tenant));
+        when(invoiceRepository.findUnpaidByTenantId("tenant::1")).thenReturn(List.of());
         when(tenantRepository.save(any(Tenant.class))).thenAnswer(inv -> inv.getArgument(0));
 
         tenantService.delete("tenant::1");
 
         assertEquals(Tenant.INACTIVE, tenant.getStatus());
         verify(tenantRepository).save(tenant);
+    }
+
+    @Test
+    void delete_throwsWhenUnpaidInvoicesExist() {
+        Tenant tenant = activeTenant("tenant::1");
+        when(tenantRepository.findById("tenant::1")).thenReturn(Optional.of(tenant));
+        when(invoiceRepository.findUnpaidByTenantId("tenant::1")).thenReturn(List.of(new Invoice(), new Invoice()));
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> tenantService.delete("tenant::1"));
+
+        assertEquals("Cannot deactivate tenant: 2 unpaid invoice(s) must be settled first", ex.getMessage());
+        verify(tenantRepository, never()).save(any());
     }
 
     @Test
